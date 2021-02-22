@@ -9,6 +9,6 @@ _Note: more details are available within subdirectories documentation_
 
 | Subdirectory | Description |
 | --- | :--- |
-| [`analysis/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/master/analysis/) | Code used for manuscript analysis |
-| [`data/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/master/data/) | Summary statistics results |
-| [`refs/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/master/refs/) | Other supporting reference files |
+| [`analysis/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/analysis/) | Code used for manuscript analysis |
+| [`data/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/) | Summary statistics results |
+| [`refs/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/refs/) | Other supporting reference files |

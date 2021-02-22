@@ -10,15 +10,15 @@ The structure of this directory is as follows:
 
 | Subdirectory | Description |
 | :--- | :--- |
-| [`SV_calls/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/master/analysis/SV_calls/) | SV site-frequency data from each study cohort |
-| [`SV_xQTL/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/master/analysis/SV_xQTL/) | Full nominal and permuted SV-xQTL summary statistics |
-| [`disease_associations/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/master/analysis/disease_associations/) | Full case-control SV associations summary statistics |
+| [`SV_calls/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/SV_calls/) | SV site-frequency data from each study cohort |
+| [`SV_xQTL/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/SV_xQTL/) | Full nominal and permuted SV-xQTL summary statistics |
+| [`disease_associations/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/disease_associations/) | Full case-control SV associations summary statistics |
 
 ## File description
 
 ### disease_associations
 
-SV calls from ROS/MAP, Mayo Clinic and MSBB were merged into a combined call set using SURVIVOR68 while requiring 1000 bp maximum distance between breakpoints to merge SVs of the same type. A total of 22,007 SVs identified and all three study groups and with MAF ??? 0.01 were selected for the association test. 
+SV calls from ROS/MAP, Mayo Clinic and MSBB were merged into a combined call set using SURVIVOR68 while requiring 1000 bp maximum distance between breakpoints to merge SVs of the same type. A total of 22,007 SVs identified and all three study groups and with MAF >= 0.01 were selected for the association test. 
 
 Alzheimer's disease status was harmonized across cohorts as previously described:
 
