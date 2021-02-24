@@ -70,7 +70,7 @@ summary QC metrics of all samples will be created.
 
 In this module, each tool must be run independently. 
 Currently, we have 7 tools included ([listed
-above](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/analysis/pipeline/README.md#tools-included)).
+above](#tools-for-sv-detection-included)).
 For each tool, jobs will be submitted for each sample.
 
 **Tool Usage/Description:**
@@ -119,16 +119,18 @@ Filters applied:
 3. Keep only PASS calls: 
 `awk -F '\t' '{if($0 ~ /\#/) print; else if($7 == "PASS") print}' sample.vcf`
 
-Additionally: \* Resulting VCF files are sorted \* ID fields are renamed
-(see
+Additionally: 
+
+* Resulting VCF files are sorted 
+* ID fields are renamed (see 
 [rename\_SampleNamesInVCF.R](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/analysis/pipeline/supporting_scripts/rename_SampleNamesInVCF.R))
-\* REF and ALF fields are also renamed (see
+* REF and ALF fields are also renamed (see
 [rename\_REFandALT.R](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/analysis/pipeline/supporting_scripts/rename_REFandALT.R))
-\* Genotypes are extracted into a separated file \* Filtered SVs are
-benchmarked against GIAB v0.6 using
-[Truvari](https://github.com/spiralgenetics/truvari)) \* Resulting SVs
-are saved also by specific SV type \* All sample are merged using
-SURVIVOR, generating a population SV call set for each tool
+* Genotypes are extracted into a separated file 
+* Filtered SVs are benchmarked against GIAB v0.6 using
+[Truvari](https://github.com/spiralgenetics/truvari)) 
+* Resulting SVs are saved also by specific SV type 
+* All sample are merged using SURVIVOR, generating a population SV call set for each tool
 
 ### Module 03: Merge SV Tools
 
