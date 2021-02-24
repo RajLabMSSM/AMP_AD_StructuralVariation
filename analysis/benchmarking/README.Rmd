@@ -1,0 +1,684 @@
+---
+title: "SV pipeline - Benchmark"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, error = FALSE)
+knitr::opts_chunk$set(out.width='90%', dpi=200)
+
+library(pacman)
+p_load(vcfR,ggsci,ggthemes,ggplot2,scales,ggpubr,data.table,kableExtra,ggrepel,tidyverse,viridis)
+
+base_breaks <- function(n = 10){
+  function(x) {
+    axisTicks(log10(range(x, na.rm = TRUE)), log = TRUE, n = n)
+  }
+}
+
+plot_vcf_stats <- function(vcfR_obj){
+  vcfR_obj.fix = as.data.frame(getFIX(vcfR_obj))
+  vcfR_obj.info = as.data.frame(extract_info_tidy(vcfR_obj))
+  vcfR_obj.info$SVTYPE = factor(vcfR_obj.info$SVTYPE, levels = c("DEL","DUP","INS","INV","BND"))
+  
+  vcfR_obj.df = cbind(vcfR_obj.fix, vcfR_obj.info)
+  vcfR_obj.df$CHROM = factor(vcfR_obj.df$CHROM, levels = c(as.character(1:22),"X","Y"))
+  if (!("SVLEN" %in% colnames(vcfR_obj.df))){
+    vcfR_obj.df$SVLEN = ifelse(vcfR_obj.df$CHROM==vcfR_obj.df$CHR2, abs(as.numeric(vcfR_obj.df$POS) - as.numeric(vcfR_obj.df$END)), NA)
+  }
+  
+  plot.summary <- ggplot(data=vcfR_obj.info, aes(x = SVTYPE, fill = SVTYPE)) + 
+    geom_bar(stat="count", color="black", size=0.5) +
+    geom_text(stat='count', aes(label=..count.., vjust=ifelse(..count..<1000,-.5,1.3)), position=position_dodge(width=0.7), size=3.5, color = "black") +
+    scale_fill_npg(drop=FALSE) +
+    scale_x_discrete(drop=FALSE) +
+    theme_classic() +
+    labs(y = "# of SVs", x = "SV type", fill = "SV type")
+  
+  plot.byChr = ggplot(data=vcfR_obj.df, aes(x = CHROM, fill = SVTYPE)) + 
+      geom_bar(stat="count", color="black", size=0.5) +
+      theme_classic() + scale_fill_npg(palette = c("nrc"), drop=FALSE) +
+      labs(x = "Chromossome", y = "# of SVs", fill = "") + theme(legend.position="right")
+    
+  t.bySize <- ggplot(vcfR_obj.df, aes(x=abs(as.numeric(SVLEN)))) +
+    geom_freqpoly(aes(color=SVTYPE), size = 1.3, bins = 150) +
+    scale_fill_npg(alpha = 0.2, drop = F) +
+    scale_color_npg(drop = F) + 
+    scale_y_continuous(trans = log_trans(), breaks = base_breaks(), labels = scales::label_number_si()) +
+    scale_x_log10(breaks = c(100, 1000, 10000, 100000, 1000000, 10000000), 
+                  label = c("100bp", "1kb", "10kb", "100kb", "1Mb", "10Mb")) +
+    theme_classic() +
+    labs(x = "SV size", y = "Count") +
+    theme(
+      legend.position = c(.95, 1.1),
+      legend.justification = c("right", "top"),
+      legend.box.just = "right",
+      legend.margin = margin(4, 4, 4, 4), 
+      legend.title = element_blank()
+    )
+  
+  plot <- ggarrange(plot.summary, plot.byChr, t.bySize, nrow = 3, ncol = 1)
+  
+  df_tbl = as.data.frame(t(as.data.frame(table(vcfR_obj.df$SVTYPE))))
+  colnames(df_tbl) = df_tbl[1,]
+  df_tbl = df_tbl[-1,]
+  
+  summary = data.frame(Total = nrow(vcfR_obj.df),df_tbl)
+  
+  list = list(plot = plot, summary = summary)
+  return(list)
+}
+
+get_vcf_stats <- function(vcfR_obj){
+  vcfR_obj.fix = as.data.frame(getFIX(vcfR_obj))
+  vcfR_obj.info = as.data.frame(extract_info_tidy(vcfR_obj))
+  vcfR_obj.info$SVTYPE = factor(vcfR_obj.info$SVTYPE, levels = c("DEL","DUP","INS","INV","BND"))
+  
+  vcfR_obj.df = cbind(vcfR_obj.fix, vcfR_obj.info)
+  df_tbl = as.data.frame(t(as.data.frame(table(vcfR_obj.df$SVTYPE))))
+  colnames(df_tbl) = df_tbl[1,]
+  df_tbl = df_tbl[-1,]
+  
+  summary = data.frame(Total = nrow(vcfR_obj.df),df_tbl)
+  return(summary)
+}
+
+get_tool_benchmark <- function(tool,path){
+  # get_tool_benchmark parses giab_report file and return the recall, precision and f1 metrics
+  # tool: some idname for the tool
+  # path: full path to giab_report.txt file
+  if (file.exists(path)) {
+    cmdstring = paste0('awk "/Performance/,/^$/" ', path ,' | sed "1d; /^$/d"')
+    report = read.table(text = system(cmdstring, intern = T), sep = '\t')
+    rep_bench = melt(report[which(report$V1 %in% c("recall","precision","f1")),],id.vars = "V1")
+    colnames(rep_bench) = c("metrics","tool","values")
+    rep_bench[is.na(rep_bench)]=0
+    rep_bench$tool = tool
+    return(rep_bench)
+  } else {
+    print("Giab report not found...")
+    rep_bench = data.frame(metrics = c("recall","precision","f1"), tool = tool, values = c(0,0,0))
+  }
+}
+
+map_callid_by_paths <- function(list_of_callers,paths_list){
+  map_list = list()
+  for (i in 1:nrow(as.data.frame(list_of_callers))) {
+    #print(c(i,list_of_callers[i]))
+    # is from SVE pipeline?
+    if (length(grep(list_of_callers[i], pattern = "SVE")) != 0) {
+      sve_paths = paths_list[grep(paths_list, pattern = "SVEPipeline")]
+      pathfound = sve_paths[grep(sve_paths, pattern = gsub("SVE\\|","",list_of_callers[i]))]
+    } else {
+      not_sve_paths = paths_list[which(!grepl(paths_list, pattern = "SVEPipeline"))]
+      pathfound = not_sve_paths[grep(not_sve_paths, pattern = list_of_callers[i])]
+    }
+    #print(pathfound)
+    if (length(pathfound) != 0){
+      #map_list = rbind(map_list,c(pathfound,list_of_callers[i]))
+      map_list = rbind(map_list,cbind(rep(pathfound,length(pathfound)),list_of_callers[i]))
+    }
+  }
+  return(unique(map_list))
+}
+```
+
+## Genome in a Bottle framework
+
+In order to measure the performance of individual SV detection tools and merging strategies, we applied the SVs benchmarking dataset from GiaB.
+This dataset contains SVs for the AshkenazimTrio son: HG002 (NA24385) using several sequencing strategies and Sv detection tools, as well a manual curation.
+Here we are using the v0.6 of the Tier 1 (isolated, sequence-resolved SVs). 
+There is also the Tier 2 (regions with at least one likely SV but it is complex or we were unable to determine a consensus sequence change), not used here.
+
+For measuring the precision and recall for each method, we used the tool truvari. An example command is:
+```
+truvari.py -b HG002_SVs_Tier1_v0.6.vcf.gz -c your.vcf.gz -o yourvcfvsGIABv0.6 --passonly --includebed HG002_SVs_Tier1_v0.6.bed -r 2000 --giabreport
+```
+
+## Tier 1 overview
+
+```{r GIAB.HG002.Tier1, echo=FALSE, results='hide', fig.keep='all', fig.width=6, fig.height=6}
+## Gathering information about Tier1 calls:
+# PASS calls only
+# awk -F '\t' '{if($0 ~ /\#/) print; else if($7 == "PASS") print}' HG002_SVs_Tier1_v0.6.vcf > HG002_SVs_Tier1_v0.6.PASS.vcf
+giab_sv = read.vcfR("data/HG002_SVs_Tier1_v0.6.PASS.vcf.gz", verbose = F)
+tier1.stats = plot_vcf_stats(giab_sv)
+tier1.stats$plot
+```
+
+## HG002 - SV calls summary by tool (raw)
+
+```{r, echo=FALSE, results='hide', fig.keep='all'}
+df = data.table(Tool=character(),Total=integer(),DEL=integer(),DUP=integer(),INS=integer(),INV=integer(),BND=integer())
+df = rbind(df,cbind(Tool="GIAB",tier1.stats$summary))
+
+vcfR_obj = read.vcfR("data/Manta_HG002_2x250.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="Manta",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/Lumpy_HG002_2x250.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="Lumpy",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/Delly_HG002_2x250.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="Delly",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/Breakdancer_HG002_2x250.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="BreakDancer",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/Breakseq_HG002_2x250.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="BreakSeq",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/CNVnator_HG002_2x250.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="CNVnator",vcfstats$summary))
+```
+
+```{r, echo=FALSE}
+kable(df, format = "markdown")
+```
+
+## Benchmark overview
+
+```{r HG002.benchmark.rawCalls, echo=FALSE,results='hide',fig.keep='all', fig.width=10, fig.height=4}
+bench = data.frame(metrics=character(),tool=character(),values=character())
+
+bench = rbind(bench,get_tool_benchmark("GIAB","data/HG002_SVs_Tier1_v0.6.giab_report.txt"))
+
+# Long reads
+bench = rbind(bench,get_tool_benchmark("PACBIO","data/giab_h002_ngmlr.giab_report.txt"))
+
+# Short reads
+bench = rbind(bench,get_tool_benchmark("MANTA","data/Manta_HG002_2x250.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("LUMPY","data/Lumpy_HG002_2x250.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("DELLY","data/Delly_HG002_2x250.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKDANCER","data/Breakdancer_HG002_2x250.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKSEQ","data/Breakseq_HG002_2x250.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("CNVNATOR","data/CNVnator_HG002_2x250.giab_report.txt"))
+
+bench$tool = factor(bench$tool, levels = unique(bench$tool))
+bench$metrics = factor(bench$metrics, levels = c("recall","precision","f1"))
+
+ggplot(data=bench, aes(x=forcats::fct_rev(tool), y=values, fill=metrics)) + 
+  geom_bar(stat="identity", color="black", position = position_dodge()) +
+  geom_text(aes(label=round(values, digits = 2)), vjust=-.8, color="black", size=3, position = position_dodge(width = .9)) +
+  theme_classic() + scale_fill_npg() + 
+  labs(x = "Method", y = "Value")
+```
+## HG002 - SV calls summary by tool (filtered)
+
+1. Keeping only calls from chr 1-22+X+Y
+2. Removing SVs smaller than 50 bp
+3. PASS only (for some tools)
+
+```{r, echo=FALSE, results='hide', fig.keep='all'}
+df = data.table(Tool=character(),Total=integer(),DEL=integer(),DUP=integer(),INS=integer(),INV=integer(),BND=integer())
+df = rbind(df,cbind(Tool="GIAB",tier1.stats$summary))
+
+vcfR_obj = read.vcfR("data/Manta_HG002_2x250.filt.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="Manta",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/Lumpy_HG002_2x250.filt.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="Lumpy",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/Delly_HG002_2x250.filt.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="Delly",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/Breakdancer_HG002_2x250.filt.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="BreakDancer",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/Breakseq_HG002_2x250.filt.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="BreakSeq",vcfstats$summary))
+
+vcfR_obj = read.vcfR("data/CNVnator_HG002_2x250.filt.vcf.gz", verbose = F)
+vcfstats = plot_vcf_stats(vcfR_obj)
+df = rbind(df,cbind(Tool="CNVnator",vcfstats$summary))
+```
+
+```{r, echo=FALSE}
+kable(df, format = "markdown")
+```
+
+## Benchmarking for HG002 (after filtering)
+
+```{r HG002.benchmark.filteredCalls, echo=FALSE,results='hide',fig.keep='all', fig.width=10, fig.height=4}
+bench = data.frame(metrics=character(),tool=character(),values=character())
+
+bench = rbind(bench,get_tool_benchmark("GIAB","data/HG002_SVs_Tier1_v0.6.giab_report.txt"))
+
+# Long reads
+bench = rbind(bench,get_tool_benchmark("PACBIO","data/giab_h002_ngmlr.giab_report.txt"))
+
+# Short reads
+bench = rbind(bench,get_tool_benchmark("MANTA","data/Manta_HG002_2x250.filt.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("LUMPY","data/Lumpy_HG002_2x250.filt.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("DELLY","data/Delly_HG002_2x250.filt.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKDANCER","data/Breakdancer_HG002_2x250.filt.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKSEQ","data/Breakseq_HG002_2x250.filt.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("CNVNATOR","data/CNVnator_HG002_2x250.filt.giab_report.txt"))
+
+bench$tool = factor(bench$tool, levels = unique(bench$tool))
+bench$metrics = factor(bench$metrics, levels = c("recall","precision","f1"))
+
+ggplot(data=bench, aes(x=forcats::fct_rev(tool), y=values, fill=metrics)) + 
+  geom_bar(stat="identity", color="black", position = position_dodge()) +
+  geom_text(aes(label=round(values, digits = 2)), vjust=-.8, color="black", size=3, position = position_dodge(width = .9)) +
+  theme_classic() + scale_fill_npg() + 
+  labs(x = "Method", y = "Value")
+```
+
+## DEL only
+
+```{r HG002.benchmark.DEL, echo=FALSE,results='hide',fig.keep='all', fig.width=8, fig.height=4}
+bench = data.frame(metrics=character(),tool=character(),values=character())
+
+# Short reads
+bench = rbind(bench,get_tool_benchmark("MANTA","data/Manta_HG002_2x250.filt.DEL.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("LUMPY","data/Lumpy_HG002_2x250.filt.DEL.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("DELLY","data/Delly_HG002_2x250.filt.DEL.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKDANCER","data/Breakdancer_HG002_2x250.filt.DEL.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKSEQ","data/Breakseq_HG002_2x250.filt.DEL.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("CNVNATOR","data/CNVnator_HG002_2x250.filt.DEL.giab_report.txt"))
+
+bench$tool = factor(bench$tool, levels = unique(bench$tool))
+bench$metrics = factor(bench$metrics, levels = c("recall","precision","f1"))
+
+ggplot(data=bench, aes(x=forcats::fct_rev(tool), y=values, fill=metrics)) + 
+  geom_bar(stat="identity", color="black", position = position_dodge()) +
+  geom_text(aes(label=round(values, digits = 2)), vjust=-.8, color="black", size=3, position = position_dodge(width = .9)) +
+  theme_classic() + scale_fill_npg() + 
+  labs(x = "Method", y = "Value")
+```
+
+## INS only
+
+```{r HG002.benchmark.INS, echo=FALSE,results='hide',fig.keep='all', fig.width=8, fig.height=4}
+bench = data.frame(metrics=character(),tool=character(),values=character())
+
+# Short reads
+bench = rbind(bench,get_tool_benchmark("MANTA","data/Manta_HG002_2x250.filt.INS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("LUMPY","data/Lumpy_HG002_2x250.filt.INS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("DELLY","data/Delly_HG002_2x250.filt.INS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKDANCER","data/Breakdancer_HG002_2x250.filt.INS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKSEQ","data/Breakseq_HG002_2x250.filt.INS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("CNVNATOR","data/CNVnator_HG002_2x250.filt.INS.giab_report.txt"))
+
+bench$tool = factor(bench$tool, levels = unique(bench$tool))
+bench$metrics = factor(bench$metrics, levels = c("recall","precision","f1"))
+
+ggplot(data=bench, aes(x=forcats::fct_rev(tool), y=values, fill=metrics)) + 
+  geom_bar(stat="identity", color="black", position = position_dodge()) +
+  geom_text(aes(label=round(values, digits = 2)), vjust=-.8, color="black", size=3, position = position_dodge(width = .9)) +
+  theme_classic() + scale_fill_npg() + 
+  labs(x = "Method", y = "Value")
+```
+
+## DUPtoINS only
+
+```{r HG002.benchmark.DUPtoINS, echo=FALSE,results='hide',fig.keep='all', fig.width=8, fig.height=4}
+bench = data.frame(metrics=character(),tool=character(),values=character())
+
+# Short reads
+bench = rbind(bench,get_tool_benchmark("MANTA","data/Manta_HG002_2x250.filt.DUPtoINS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("LUMPY","data/Lumpy_HG002_2x250.filt.DUPtoINS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("DELLY","data/Delly_HG002_2x250.filt.DUPtoINS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKDANCER","data/Breakdancer_HG002_2x250.filt.DUPtoINS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("BREAKSEQ","data/Breakseq_HG002_2x250.filt.DUPtoINS.giab_report.txt"))
+bench = rbind(bench,get_tool_benchmark("CNVNATOR","data/CNVnator_HG002_2x250.filt.DUPtoINS.giab_report.txt"))
+
+bench$tool = factor(bench$tool, levels = unique(bench$tool))
+bench$metrics = factor(bench$metrics, levels = c("recall","precision","f1"))
+
+ggplot(data=bench, aes(x=forcats::fct_rev(tool), y=values, fill=metrics)) + 
+  geom_bar(stat="identity", color="black", position = position_dodge()) +
+  geom_text(aes(label=round(values, digits = 2)), vjust=-.8, color="black", size=3, position = position_dodge(width = .9)) +
+  theme_classic() + scale_fill_npg() + 
+  labs(x = "Method", y = "Value")
+```
+
+## Performance per tool - DEL (Scatter plot)
+
+Here we investigate different merging strategies starting with simple comparisons between tools and than using different combinations of tools, merging calls by UNION, INTERSECTION, or with at least 'N' tools support. 
+
+Results are evaluated in terms of precision, recall and F1 score, as showed in the plot below.
+
+```{r HG002.benchmark.DEL.Scatter, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+list_of_callers = c("Manta","Delly","Lumpy","CNVnator","Breakdancer","Breakseq")
+reports_list = system("ls data/*.DEL.giab_report.txt", intern = T)
+
+tool_labels = unlist(map_callid_by_paths(list_of_callers,reports_list)[match(reports_list,map_callid_by_paths(list_of_callers,reports_list)),2])
+
+bench = data.frame(metrics=character(),tool=character(),values=character())
+for (i_reportFile in 1:length(reports_list)){
+  print(reports_list[i_reportFile])
+  bench = rbind(bench,get_tool_benchmark(tool_labels[i_reportFile],reports_list[i_reportFile]))
+}
+dbench = dcast(bench, tool ~ metrics, value.var = "values")
+ggplot(dbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel() +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall")
+```
+
+## Merging DEL - Strategy 1 
+
+STRATEGY 1 - combines UNION of different tools
+
+Tools are merged using SURVIVOR and calls with at least 1 caller support are kept (i.e. the UNION of calls)
+
+```{r HG002.benchmark.DEL.Strat1, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.DEL_Benchmark_Strat1.tbl"), sep = '\t')
+mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 50) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top 10 F1 score - Strategy 1
+
+```{r,echo=FALSE}
+kable(mdbench[1:10,], format = "markdown")
+```
+
+## Merging DEL - Strategy 2 
+
+STRATEGY 2 - combines INTERSECTION of different tools
+
+Tools are merged using SURVIVOR and calls supported by all callers are kept (i.e. the INTERSECTION of calls)
+
+```{r HG002.benchmark.DEL.Strat2, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.DEL_Benchmark_Strat2.tbl"), sep = '\t')
+mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 50) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top 10 F1 score - Strategy 2
+
+```{r, echo=FALSE}
+kable(mdbench[1:10,], format = "markdown")
+```
+
+## Merging DEL - Strategy 3 
+
+STRATEGY 3 - combines different tools and uses calls found by at least X tools
+
+Tools are merged using SURVIVOR and calls supported by X callers are kept
+
+```{r HG002.benchmark.DEL.Strat3, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.DEL_Benchmark_Strat3.tbl"), sep = '\t')
+#mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 50) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top F1 score - Strategy 3
+
+```{r, echo=FALSE}
+kable(mdbench, format = "markdown")
+```
+
+## Merging DEL - Strategy 4 
+
+All possible combination of tool (by INTERSECTION) are compared with different thresholds for the number of supporting tools (INFO:SUPP). 
+
+Calls are removed if below the threshold.
+
+```{r HG002.benchmark.DEL.Strat4, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.DEL_Benchmark_Strat4.tbl"), sep = '\t')
+mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 50) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top 10 F1 score - Strategy 4
+
+```{r, echo=FALSE}
+kable(mdbench[1:10,], format = "markdown")
+```
+
+## Merging DEL - Strategy 5 
+
+All possible combination of tool (by UNION) are compared with different thresholds for the number of supporting tools (INFO:SUPP). 
+
+Calls are removed if below the threshold.
+
+```{r HG002.benchmark.DEL.Strat5, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.DEL_Benchmark_Strat5.tbl"), sep = '\t')
+mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 100) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top 10 F1 score - Strategy 5
+
+```{r, echo=FALSE}
+kable(mdbench[1:10,], format = "markdown")
+```
+
+## Performance per tool - INS (Scatter plot)
+
+Here we investigate different merging strategies starting with simple comparisons between tools and than using different combinations of tools, merging calls by UNION, INTERSECTION, or with at least 'N' tools support. 
+
+Results are evaluated in terms of precision, recall and F1 score, as showed in the plot below.
+
+```{r HG002.benchmark.INS.Scatter, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+list_of_callers = c("Manta","Delly","Lumpy","CNVnator","Breakdancer","Breakseq")
+reports_list = system("ls data/*.INS.giab_report.txt", intern = T)
+
+tool_labels = unlist(map_callid_by_paths(list_of_callers,reports_list)[match(reports_list,map_callid_by_paths(list_of_callers,reports_list)),2])
+
+bench = data.frame(metrics=character(),tool=character(),values=character())
+for (i_reportFile in 1:length(reports_list)){
+  print(reports_list[i_reportFile])
+  bench = rbind(bench,get_tool_benchmark(tool_labels[i_reportFile],reports_list[i_reportFile]))
+}
+dbench = dcast(bench, tool ~ metrics, value.var = "values")
+ggplot(dbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel() +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall")
+```
+
+## Merging INS - Strategy 1 
+
+STRATEGY 1 - combines UNION of different tools
+
+Tools are merged using SURVIVOR and calls with at least 1 caller support are kept (i.e. the UNION of calls)
+
+```{r HG002.benchmark.INS.Strat1, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.INS_Benchmark_Strat1.tbl"), sep = '\t')
+mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 50) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top 10 F1 score - Strategy 1
+
+```{r, echo=FALSE}
+kable(mdbench[1:10,], format = "markdown")
+```
+
+## Merging INS - Strategy 2 
+
+STRATEGY 2 - combines INTERSECTION of different tools
+
+Tools are merged using SURVIVOR and calls supported by all callers are kept (i.e. the INTERSECTION of calls)
+
+```{r HG002.benchmark.INS.Strat2, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.INS_Benchmark_Strat2.tbl"), sep = '\t')
+mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 50) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top 10 F1 score - Strategy 2
+
+```{r, echo=FALSE}
+kable(mdbench[1:10,], format = "markdown")
+```
+
+## Merging INS - Strategy 3 
+
+STRATEGY 3 - combines different tools and uses calls found by at least X tools
+
+Tools are merged using SURVIVOR and calls supported by X callers are kept
+
+```{r HG002.benchmark.INS.Strat3, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.INS_Benchmark_Strat3.tbl"), sep = '\t')
+#mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 50) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top 10 F1 score - Strategy 3
+
+```{r, echo=FALSE}
+kable(mdbench, format = "markdown")
+```
+
+## Merging INS - Strategy 4 
+
+All possible combination of tool (by INTERSECTION) are compared with different thresholds for the number of supporting tools (INFO:SUPP). 
+
+Calls are removed if below the threshold.
+
+```{r HG002.benchmark.INS.Strat4, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.INS_Benchmark_Strat4.tbl"), sep = '\t')
+mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 50) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top 10 F1 score - Strategy 4
+
+```{r, echo=FALSE}
+kable(mdbench[1:10,], format = "markdown")
+```
+
+## Merging INS - Strategy 5 
+
+All possible combination of tool (by UNION) are compared with different thresholds for the number of supporting tools (INFO:SUPP). 
+
+Calls are removed if below the threshold.
+
+```{r HG002.benchmark.INS.Strat5, echo=FALSE,results='hide',fig.keep='all', fig.width=4, fig.height=3}
+mdbench = read.table(file = paste0("data/HG002_filt.INS_Benchmark_Strat5.tbl"), sep = '\t')
+mdbench$tool[11:nrow(mdbench)] <- ""
+ggplot(mdbench,aes(x = precision, y = recall, color = f1, label = tool)) +
+  geom_point() + geom_text_repel(max.overlaps = 50) +
+  xlim(c(0,1)) + ylim(c(0,1)) + scale_color_gradient(high="#E64B35FF", low="#3C5488FF") +
+  theme_classic() + scale_fill_npg(palette = c("nrc")) +
+  labs(x = "Precision", y = "Recall") + 
+  geom_vline(xintercept = mdbench$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = mdbench$recall[1], linetype="dotted")
+```
+
+Top 10 F1 score - Strategy 5
+
+```{r, echo=FALSE}
+kable(mdbench[1:10,], format = "markdown")
+```
+
+## Final merging strategy
+
+Based on all strategies evaluated, we choose this merging rules for each SV type.
+
+* DEL = Manta + (LUMPY+DELLY+BreakSeq+BreakDancer+CNVnator – at least 2 callers support)
+* INS = Manta + BreakSeq
+* DUP = DELLY+LUMPY+Manta+BreakDancer+CNVnator – at least 2 callers support
+* INV = DELLY+LUMPY+Manta+BreakDancer – at least 2 callers support
+* TRA = DELLY+LUMPY+Manta+BreakDancer – at least 2 callers support
+
+## Merged callset summary
+
+```{r HG002.MergedCallSet, echo=FALSE, results='hide', fig.keep='all', fig.width=6, fig.height=6}
+## Gathering information about Tier1 calls:
+# PASS calls only
+# awk -F '\t' '{if($0 ~ /\#/) print; else if($7 == "PASS") print}' HG002_SVs_Tier1_v0.6.vcf > HG002_SVs_Tier1_v0.6.PASS.vcf
+merged_sv = read.vcfR("data/HG002_2x250.ALL_merged.vcf.gz", verbose = F)
+merged.stats = plot_vcf_stats(merged_sv)
+merged.stats$plot
+```
+
+## Benchmarking overall
+
+```{r message=F, warning=F, results='hide', fig.keep='last', fig.width=3.5, fig.height=3, dpi=600, eval=T}
+bench = read.table(file = paste0("data/bench_tools.txt"), header = T)
+bench_m = bench %>%
+  filter(tool %in% c("hg002_merged","hg002_manta","hg002_lumpy","hg002_delly","hg002_sve-breakdancer","hg002_sve-breakseq","hg002_sve-cnvnator")) %>%
+  pivot_wider(names_from = metrics, values_from = values)
+bench_m$tool = as.character(bench_m$tool)
+bench_m$tool[bench_m$tool=="hg002_merged"] <- "Merged"
+bench_m$tool[bench_m$tool=="hg002_manta"] <- "Manta"
+bench_m$tool[bench_m$tool=="hg002_lumpy"] <- "Lumpy"
+bench_m$tool[bench_m$tool=="hg002_delly"] <- "Delly"
+bench_m$tool[bench_m$tool=="hg002_sve-breakdancer"] <- "BreakDancer"
+bench_m$tool[bench_m$tool=="hg002_sve-breakseq"] <- "BreakSeq"
+bench_m$tool[bench_m$tool=="hg002_sve-cnvnator"] <- "CNVnator"
+
+ggplot(bench_m, aes(x = precision, y = recall, fill = f1, label = tool)) +
+  geom_vline(xintercept = bench_m$precision[1], linetype="dotted") + 
+  geom_hline(yintercept = bench_m$recall[1], linetype="dotted") +
+  geom_point(color = "black", shape = 21, size = 3) + 
+  geom_text_repel() +
+  scale_fill_viridis(option = "inferno") +
+  theme_tufte(base_family = "Helvetica") + 
+  expand_limits(y = c(0,.5), x = c(0,1)) +
+  labs(x = "Precision", y = "Recall", fill = "F1")
+```
+

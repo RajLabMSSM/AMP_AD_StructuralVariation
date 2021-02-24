@@ -1,0 +1,239 @@
+TP	2228
+FN	7413
+
+TP_size
+50to99	305
+100to299	416
+300to999	1031
+gt1000	476
+FN_size
+50to99	2650
+100to299	1933
+300to999	2026
+gt1000	804
+
+TP_type
+DEL	2228
+INS	0
+COMPLEX	0
+FN_type
+DEL	1971
+INS	5442
+COMPLEX	0
+
+TP_Type+Size
+.	DEL	INS	COMPLEX
+50to99	305	0	0
+100to299	416	0	0
+300to999	1031	0	0
+gt1000	476	0	0
+FN_Type+Size
+.	DEL	INS	COMPLEX
+50to99	1149	1501	0
+100to299	561	1372	0
+300to999	209	1817	0
+gt1000	52	752	0
+
+TP_REPTYPE
+SIMPLEDEL	2022
+SIMPLEINS	0
+DUP	0
+SUBSDEL	178
+SUBSINS	0
+CONTRAC	28
+FN_REPTYPE
+SIMPLEDEL	870
+SIMPLEINS	3320
+DUP	1772
+SUBSDEL	53
+SUBSINS	250
+CONTRAC	1148
+
+TP_size+REPTYPE
+.	50to99	100to299	300to999	gt1000
+SIMPLEDEL	300	360	958	404
+SIMPLEINS	0	0	0	0
+DUP	0	0	0	0
+SUBSDEL	2	47	58	71
+SUBSINS	0	0	0	0
+CONTRAC	3	9	15	1
+FN_size+REPTYPE
+.	50to99	100to299	300to999	gt1000
+SIMPLEDEL	448	210	159	53
+SIMPLEINS	446	734	1506	634
+DUP	1028	537	188	19
+SUBSDEL	6	18	20	9
+SUBSINS	8	74	88	80
+CONTRAC	714	360	65	9
+
+TP_Tech
+I+PB+CG+TenX	267
+I+PB+CG	22
+I+PB+TenX	1907
+PB+CG+TenX	0
+I+PB	24
+I+CG	0
+I+TenX	3
+PB+CG	0
+PB+TenX	2
+CG+TenX	0
+I	1
+PB	2
+CG	0
+TenX	0
+FN_Tech
+I+PB+CG+TenX	25
+I+PB+CG	17
+I+PB+TenX	2545
+PB+CG+TenX	0
+I+PB	3228
+I+CG	1
+I+TenX	6
+PB+CG	0
+PB+TenX	98
+CG+TenX	0
+I	50
+PB	1443
+CG	0
+TenX	0
+
+TP_Size+Tech
+.	50to99	100to299	300to999	gt1000
+I+PB+CG+TenX	182	85	0	0
+I+PB+CG	20	2	0	0
+I+PB+TenX	88	326	1024	469
+PB+CG+TenX	0	0	0	0
+I+PB	12	3	4	5
+I+CG	0	0	0	0
+I+TenX	3	0	0	0
+PB+CG	0	0	0	0
+PB+TenX	0	0	1	1
+CG+TenX	0	0	0	0
+I	0	0	0	1
+PB	0	0	2	0
+CG	0	0	0	0
+TenX	0	0	0	0
+FN_Size+Tech
+.	50to99	100to299	300to999	gt1000
+I+PB+CG+TenX	22	3	0	0
+I+PB+CG	17	0	0	0
+I+PB+TenX	768	801	693	283
+PB+CG+TenX	0	0	0	0
+I+PB	1584	628	805	211
+I+CG	1	0	0	0
+I+TenX	6	0	0	0
+PB+CG	0	0	0	0
+PB+TenX	6	36	27	29
+CG+TenX	0	0	0	0
+I	49	1	0	0
+PB	197	464	501	281
+CG	0	0	0	0
+TenX	0	0	0	0
+
+TP_Type+Tech
+.	DEL	INS	COMPLEX
+I+PB+CG+TenX	267	0	0
+I+PB+CG	22	0	0
+I+PB+TenX	1907	0	0
+PB+CG+TenX	0	0	0
+I+PB	24	0	0
+I+CG	0	0	0
+I+TenX	3	0	0
+PB+CG	0	0	0
+PB+TenX	2	0	0
+CG+TenX	0	0	0
+I	1	0	0
+PB	2	0	0
+CG	0	0	0
+TenX	0	0	0
+FN_Type+Tech
+.	DEL	INS	COMPLEX
+I+PB+CG+TenX	17	8	0
+I+PB+CG	6	11	0
+I+PB+TenX	976	1569	0
+PB+CG+TenX	0	0	0
+I+PB	748	2480	0
+I+CG	1	0	0
+I+TenX	6	0	0
+PB+CG	0	0	0
+PB+TenX	18	80	0
+CG+TenX	0	0	0
+I	20	30	0
+PB	179	1264	0
+CG	0	0	0
+TenX	0	0	0
+
+Performance
+FN	7413
+FP	672
+TP-base	2228
+TP-call	2228
+base cnt	9641
+base gt filtered	0
+base size filtered	6309
+call cnt	2900
+call gt filtered	0
+call size filtered	3937
+f1	0.355314568216
+precision	0.768275862069
+recall	0.231096359299
+
+Args
+bSample	None
+base	/hpc/users/rajt01/ad-omics/ricardo/Data/GIAB/HG002/benchmark/HG002_SVs_Tier1_v0.6.vcf.gz
+cSample	None
+comp	/hpc/users/rajt01/ad-omics/ricardo/HG002/02_SVtools/LUMPY/Results/svBenchmark/HG002_2x250_raw/temp/HG002_2x250.sorted.vcf.gz
+debug	False
+giabreport	True
+gtcomp	False
+includebed	/hpc/users/rajt01/ad-omics/ricardo/Data/GIAB/HG002/benchmark/HG002_SVs_Tier1_v0.6.bed
+multimatch	False
+no_ref	False
+output	/hpc/users/rajt01/ad-omics/ricardo/HG002/02_SVtools/LUMPY/Results/svBenchmark/HG002_2x250_raw/temp/truvari/
+passonly	True
+pctovl	0.0
+pctsim	0.0
+pctsize	0.7
+refdist	2000
+reference	/hpc/users/rajt01/ad-omics/ricardo/Data/1000G_phase1/human_g1k_v37.fasta
+sizefilt	30
+sizemax	50000
+sizemin	50
+typeignore	False
+
+TP_HG002GT
+0/1	1303
+./1	0
+1/1	925
+FN_HG002GT
+0/1	3885
+./1	0
+1/1	3528
+
+TP_HG003.HG004GT
+.	./.	0/0	0/1	./1	1/1
+./.	5	8	11	0	5
+0/0	8	5	284	0	110
+0/1	13	313	332	0	247
+./1	0	0	0	0	0
+1/1	10	121	222	0	534
+FN_HG003.HG004GT
+.	./.	0/0	0/1	./1	1/1
+./.	189	89	279	0	302
+0/0	64	4	682	0	249
+0/1	286	719	920	0	568
+./1	1	1	0	0	0
+1/1	285	250	561	0	1964
+
+TP TandemRepeat Anno
+.	FALSE	TRUE
+TRall	1916	312
+TRgt100	1997	231
+TRgt10k	2228	0
+segdup	2228	0
+FN TandemRepeat Anno
+.	FALSE	TRUE
+TRall	3237	4176
+TRgt100	3675	3738
+TRgt10k	7413	0
+segdup	7413	0

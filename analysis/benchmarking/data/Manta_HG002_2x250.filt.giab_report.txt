@@ -1,0 +1,247 @@
+TP	3905
+FN	5736
+
+TP_size
+50to99	1524
+100to299	919
+300to999	1076
+gt1000	386
+FN_size
+50to99	1431
+100to299	1430
+300to999	1981
+gt1000	894
+
+TP_type
+DEL	2847
+INS	1058
+COMPLEX	0
+FN_type
+DEL	1352
+INS	4384
+COMPLEX	0
+
+TP_Type+Size
+.	DEL	INS	COMPLEX
+50to99	909	615	0
+100to299	591	328	0
+300to999	961	115	0
+gt1000	386	0	0
+FN_Type+Size
+.	DEL	INS	COMPLEX
+50to99	545	886	0
+100to299	386	1044	0
+300to999	279	1702	0
+gt1000	142	752	0
+
+TP_REPTYPE
+SIMPLEDEL	2181
+SIMPLEINS	610
+DUP	399
+SUBSDEL	188
+SUBSINS	33
+CONTRAC	494
+FN_REPTYPE
+SIMPLEDEL	711
+SIMPLEINS	2710
+DUP	1373
+SUBSDEL	43
+SUBSINS	217
+CONTRAC	682
+
+TP_size+REPTYPE
+.	50to99	100to299	300to999	gt1000
+SIMPLEDEL	532	452	881	316
+SIMPLEINS	258	249	103	0
+DUP	349	47	3	0
+SUBSDEL	4	52	62	70
+SUBSINS	4	23	6	0
+CONTRAC	377	96	21	0
+FN_size+REPTYPE
+.	50to99	100to299	300to999	gt1000
+SIMPLEDEL	216	118	236	141
+SIMPLEINS	188	485	1403	634
+DUP	679	490	185	19
+SUBSDEL	4	13	16	10
+SUBSINS	4	51	82	80
+CONTRAC	340	273	59	10
+
+TP_Tech
+I+PB+CG+TenX	264
+I+PB+CG	22
+I+PB+TenX	2766
+PB+CG+TenX	0
+I+PB	813
+I+CG	1
+I+TenX	5
+PB+CG	0
+PB+TenX	1
+CG+TenX	0
+I	21
+PB	12
+CG	0
+TenX	0
+FN_Tech
+I+PB+CG+TenX	28
+I+PB+CG	17
+I+PB+TenX	1686
+PB+CG+TenX	0
+I+PB	2439
+I+CG	0
+I+TenX	4
+PB+CG	0
+PB+TenX	99
+CG+TenX	0
+I	30
+PB	1433
+CG	0
+TenX	0
+
+TP_Size+Tech
+.	50to99	100to299	300to999	gt1000
+I+PB+CG+TenX	183	81	0	0
+I+PB+CG	20	2	0	0
+I+PB+TenX	635	714	1034	383
+PB+CG+TenX	0	0	0	0
+I+PB	656	113	41	3
+I+CG	1	0	0	0
+I+TenX	5	0	0	0
+PB+CG	0	0	0	0
+PB+TenX	0	1	0	0
+CG+TenX	0	0	0	0
+I	20	1	0	0
+PB	4	7	1	0
+CG	0	0	0	0
+TenX	0	0	0	0
+FN_Size+Tech
+.	50to99	100to299	300to999	gt1000
+I+PB+CG+TenX	21	7	0	0
+I+PB+CG	17	0	0	0
+I+PB+TenX	221	413	683	369
+PB+CG+TenX	0	0	0	0
+I+PB	940	518	768	213
+I+CG	0	0	0	0
+I+TenX	4	0	0	0
+PB+CG	0	0	0	0
+PB+TenX	6	35	28	30
+CG+TenX	0	0	0	0
+I	29	0	0	1
+PB	193	457	502	281
+CG	0	0	0	0
+TenX	0	0	0	0
+
+TP_Type+Tech
+.	DEL	INS	COMPLEX
+I+PB+CG+TenX	264	0	0
+I+PB+CG	19	3	0
+I+PB+TenX	2240	526	0
+PB+CG+TenX	0	0	0
+I+PB	302	511	0
+I+CG	1	0	0
+I+TenX	5	0	0
+PB+CG	0	0	0
+PB+TenX	0	1	0
+CG+TenX	0	0	0
+I	10	11	0
+PB	6	6	0
+CG	0	0	0
+TenX	0	0	0
+FN_Type+Tech
+.	DEL	INS	COMPLEX
+I+PB+CG+TenX	20	8	0
+I+PB+CG	9	8	0
+I+PB+TenX	643	1043	0
+PB+CG+TenX	0	0	0
+I+PB	470	1969	0
+I+CG	0	0	0
+I+TenX	4	0	0
+PB+CG	0	0	0
+PB+TenX	20	79	0
+CG+TenX	0	0	0
+I	11	19	0
+PB	175	1258	0
+CG	0	0	0
+TenX	0	0	0
+
+Performance
+FN	5736
+FP	580
+TP-base	3905
+TP-base_FP-gt	125
+TP-base_TP-gt	3780
+TP-call	3905
+TP-call_FP-gt	125
+TP-call_TP-gt	3780
+base cnt	9641
+base gt filtered	0
+base size filtered	6309
+call cnt	4485
+call gt filtered	0
+call size filtered	627
+f1	0.5528812119495965
+gt_f1	0.5399614313263338
+gt_precision	0.842809364548495
+gt_recall	0.39722572509457754
+precision	0.8706800445930881
+recall	0.4050409708536459
+
+Args
+bSample	None
+base	/hpc/users/viallr01/ad-omics/ricardo/Data/GIAB/HG002_SV_benchmark/HG002_SVs_Tier1_v0.6.vcf.gz
+cSample	None
+comp	/hpc/users/viallr01/ad-omics/ricardo/HG002/02_SVtools/Manta/Results/svBenchmark/HG002_2x250_filt/temp/HG002_2x250.sorted.vcf.gz
+debug	False
+giabreport	True
+gtcomp	False
+includebed	/hpc/users/viallr01/ad-omics/ricardo/Data/GIAB/HG002_SV_benchmark/HG002_SVs_Tier1_v0.6.bed
+multimatch	False
+no_ref	False
+output	/hpc/users/viallr01/ad-omics/ricardo/HG002/02_SVtools/Manta/Results/svBenchmark/HG002_2x250_filt/temp/truvari/
+passonly	True
+pctovl	0.0
+pctsim	0.0
+pctsize	0.7
+prog	False
+refdist	2000
+reference	/hpc/users/viallr01/ad-omics/ricardo/Data/1000G_phase1/human_g1k_v37.fasta
+sizefilt	30
+sizemax	50000
+sizemin	50
+typeignore	False
+
+TP_HG002GT
+0/1	2087
+./1	0
+1/1	1818
+FN_HG002GT
+0/1	3101
+./1	0
+1/1	2635
+
+TP_HG003.HG004GT
+.	./.	0/0	0/1	./1	1/1
+./.	40	24	64	0	69
+0/0	17	5	419	0	166
+0/1	66	461	545	0	392
+./1	0	0	0	0	0
+1/1	55	173	351	0	1058
+FN_HG003.HG004GT
+.	./.	0/0	0/1	./1	1/1
+./.	154	73	226	0	238
+0/0	55	4	547	0	193
+0/1	233	571	707	0	423
+./1	1	1	0	0	0
+1/1	240	198	432	0	1440
+
+TP TandemRepeat Anno
+.	FALSE	TRUE
+TRall	2500	1405
+TRgt100	2684	1221
+TRgt10k	3905	0
+segdup	3905	0
+FN TandemRepeat Anno
+.	FALSE	TRUE
+TRall	2653	3083
+TRgt100	2988	2748
+TRgt10k	5736	0
+segdup	5736	0
