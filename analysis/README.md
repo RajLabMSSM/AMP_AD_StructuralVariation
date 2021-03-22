@@ -13,7 +13,8 @@ _Note: more details are available within subdirectories documentation_
 | Subdirectory | Description |
 | --- | :--- |
 | [`pipeline/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/analysis/pipeline/) | Code for the SV discovery pipeline |
-| [`xQTL/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/analysis/pipeline/) | Scripts for xQTL mapping |
+| [`xQTL/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/analysis/xQTL/) | Scripts for xQTL mapping |
 | [`benchmarking/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/analysis/benchmarking/) | Benchmarking analysis |
+| [`long_read_validation/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/analysis/long_read_validation/) | Long read validation analysis |
 
 ------

@@ -1,0 +1,313 @@
+---
+title: "SV Validation"
+author: |
+  | Ricardo A. Vialle
+  | Raj Lab
+  | Department of Neuroscience
+  | Icahn School of Medicine at Mount Sinai
+  | NYC, New York
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_document:
+    theme: spacelab
+    highlight: zenburn
+    code_folding: hide
+    toc: true
+    toc_float: true
+    df_print: paged
+    smooth_scroll: true
+    number_sections: false
+    self_contained: true
+---
+
+<!-- Justify texts in the page --> 
+<style>
+body {
+text-align: justify}
+</style>
+
+<a href="https://github.com/RajLabMSSM/StructuralVariation">Back to Repo</a>
+
+***
+
+```{r setup, message=F, warning=F}
+## Setup, Load Libraries & Report Versions
+knitr::opts_chunk$set(echo = TRUE)
+
+## Load Libraries ------------------- 
+## IMPORTANT!
+## Please check the paths and files in the file "load_packages_and_functions.R" before running this!
+## All .R files must be in the same folder, specified below in 'lib_folder'
+lib_folder = "~/ad-omics/ricardo/MyRepo/structuralvariation/R_Library/"
+source(paste0(lib_folder,"load_packages_and_functions.R"))
+
+createDT <- function(DF, caption="", scrollY=500){
+  data <- DT::datatable(DF, caption=caption,
+    extensions = 'Buttons',
+    class = "display",
+    callback = JS("return table;"),
+    filter = c("none", "bottom", "top"), 
+    escape = TRUE,
+    style = "default", width = NULL, height = NULL, elementId = NULL,
+    fillContainer = getOption("DT.fillContainer", NULL),
+    autoHideNavigation = getOption("DT.autoHideNavigation", NULL),
+    selection = c("multiple", "single", "none"),
+    plugins = NULL, editable = FALSE,
+    options = list( dom = 'Bfrtip', 
+                    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'), 
+                    scrollY = scrollY, scrollX=T, scrollCollapse = T, paging = T,  
+                    columnDefs = list(list(className = 'dt-center', targets = "_all"))
+    )
+  ) 
+  return(data)
+}
+```
+
+# Selecting samples {.tabset .tabset-fade}
+
+Structural Variations (SVs) are increasingly recognized for their importance in genomics. Short-read sequencing is the most widely-used approach for genotyping large numbers of samples for SVs but suffers from relatively poor accuracy. SVCollector, is an open-source method that optimally selects samples to maximize variant discovery and validation using long read resequenc- ing or PCR-based validation. 
+
+SVCollector has two major ranking modes: topN, and greedy. For the topN mode, it picks samples with the largest number of SVs irrespective if the SVs are shared with other samples. For the greedy mode, it finds a set of samples that collectively contain the largest number of distinct variants. Solving this exactly is computationally intractable as it is a version of the well-known NP-hard set cover problem. Consequently, it uses a greedy approximation thatstarts with the sample with the largest number of variants, and then iteratively picks the sample containing the largest number variants not yet included in the set. It also has a random mode that mimics an arbitrary selection process, and is helpful for evaluating the diversity of the topN or greedy approaches. For each mode, SVCollector reports the rank, sample name, its unique contribution of SVs, the cumulative sum of SVs up to the chosen sample, and the cumulative percentage compared to the total number of SVs in the input VCF file.
+
+```{r warning=FALSE, message=FALSE, results='hide'}
+root_dir = "~/ad-omics/ricardo/"
+svcollector_path = paste0(root_dir,"MyApps/SVCollector/Debug/SVCollector")
+svcollector_script = paste0(root_dir,"MyApps/SVCollector/SVCollector.sh")
+
+ROSMAP_path = paste0(root_dir,"ROSMAP/")
+gt_merged_ROSMAP = paste0(ROSMAP_path,"05_MergedSamples/fromSMOOVE/samples_merged_DEL.Final.vcf.gz")
+
+raw_merged_ROSMAP = paste0(ROSMAP_path,"03_MergedCalls/SURVIVOR/population/samples_merged_DEL.vcf")
+
+
+ROSMAP_Ancestry = read.csv(paste0(ROSMAP_path,"01_GeneticPC/pca.ancestry_prediction.csv"), header = T, stringsAsFactors = F, check.names = F, comment.char = "")
+ROSMAP_Euro = ROSMAP_Ancestry[ROSMAP_Ancestry$EUR==1,]
+
+MSBB_path = paste0(root_dir,"MSinai/")
+gt_merged_MSBB = paste0(MSBB_path,"05_MergedSamples/fromSMOOVE/samples_merged_DEL.Final.vcf.gz")
+
+raw_merged_MSBB = paste0(MSBB_path,"03_MergedCalls/SURVIVOR/population/samples_merged_DEL.vcf")
+
+
+MSBB_Ancestry = read.csv(paste0(MSBB_path,"01_GeneticPC/pca.ancestry_prediction.csv"), header = T, stringsAsFactors = F, check.names = F, comment.char = "")
+MSBB_Euro = MSBB_Ancestry[MSBB_Ancestry$EUR==1,]
+
+# Outputs
+work_dir = paste0(root_dir,"AMP_AD/LongReadsValidation.FINAL/")
+system(paste0("mkdir -p ",work_dir))
+
+gt_vcf_ROSMAP = paste0(work_dir,"ROSMAP.gt.vcf")
+raw_vcf_ROSMAP = paste0(work_dir,"ROSMAP.raw.vcf")
+gt_vcf_MSBB = paste0(work_dir,"MSBB.gt.vcf")
+raw_vcf_MSBB = paste0(work_dir,"MSBB.raw.vcf")
+```
+
+```{r warning=FALSE, message=FALSE, results='hide'}
+ROSMAP_samples = system(paste0("ml bcftools; bcftools query -l ", gt_merged_ROSMAP), intern = T)
+ROSMAP_samples_to_use = unique(ROSMAP_Euro[ROSMAP_Euro$`#sample`%in%ROSMAP_samples,"#sample"])
+
+MSBB_samples = system(paste0("ml bcftools; bcftools query -l ", gt_merged_MSBB), intern = T)
+MSBB_samples_to_use = unique(MSBB_Euro[MSBB_Euro$`#sample`%in%MSBB_samples,"#sample"])
+```
+
+```{r warning=FALSE, message=FALSE, results='hide', eval=T}
+sysout = system(paste0("ml bcftools; bcftools view --force-samples -s ", paste0(ROSMAP_samples_to_use, collapse = ","), " ", raw_merged_ROSMAP, " | bcftools sort -o ", raw_vcf_ROSMAP), intern = T)
+sysout = system(paste0("ml bcftools; bcftools view --force-samples -s ", paste0(ROSMAP_samples_to_use, collapse = ","), " ", gt_merged_ROSMAP, " | bcftools sort -o ", gt_vcf_ROSMAP), intern = T)
+
+sysout = system(paste0("ml bcftools; bcftools view --force-samples -s ", paste0(MSBB_samples_to_use, collapse = ","), " ", raw_merged_MSBB, " | bcftools sort -o ", raw_vcf_MSBB), intern = T)
+sysout = system(paste0("ml bcftools; bcftools view --force-samples -s ", paste0(MSBB_samples_to_use, collapse = ","), " ", gt_merged_MSBB, " | bcftools sort -o ", gt_vcf_MSBB), intern = T)
+
+sysout = system(paste("ml parallel;",svcollector_script, raw_vcf_ROSMAP, length(ROSMAP_samples_to_use), work_dir), intern = T)
+sysout = system(paste("ml parallel;",svcollector_script, gt_vcf_ROSMAP, length(ROSMAP_samples_to_use), work_dir), intern = T)
+
+sysout = system(paste("ml parallel;",svcollector_script, raw_vcf_MSBB, length(MSBB_samples_to_use), work_dir), intern = T)
+sysout = system(paste("ml parallel;",svcollector_script, gt_vcf_MSBB, length(MSBB_samples_to_use), work_dir), intern = T)
+```
+
+```{r}
+#raw_ROSMAP = read.vcfR(raw_vcf_ROSMAP, verbose = F)
+#gt_ROSMAP = read.vcfR(gt_vcf_ROSMAP, verbose = F)
+
+#raw_MSBB = read.vcfR(raw_vcf_MSBB, verbose = F)
+#gt_MSBB = read.vcfR(gt_vcf_MSBB, verbose = F)
+```
+
+## ROSMAP {.tabset .tabset-fade .tabset-pills}
+
+```{r}
+cohort = "ROSMAP"
+```
+
+**Samples ancestries**
+
+Getting only Europeans
+
+```{r message=F, warning=F, results='hide', fig.keep='last', dpi=600, fig.width=22, fig.height=13}
+a = plot_samples_ancestry(ROSMAP_samples_to_use, label="ROSMAP-EUR")
+```
+
+### Greedy
+
+```{r}
+mode = "greedy"
+SVCollector_output = paste0(work_dir, cohort, ".raw.vcf.", mode)
+SVCollector_results_greedy = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV"))
+SVCollector_results_greedy$Genotyped = "No"
+SVCollector_output.gt = paste0(work_dir, cohort, ".gt.vcf.", mode)
+SVCollector_results_greedy.gt = read.table(SVCollector_output.gt, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV")) 
+SVCollector_results_greedy.gt$Genotyped = "Yes"
+
+#SVCollector_results_greedy = melt(rbind(SVCollector_results_greedy,SVCollector_results_greedy.gt),id.vars = c("Sample","Genotyped"))
+SVCollector_results_greedy = rbind(SVCollector_results_greedy,SVCollector_results_greedy.gt)
+createDT(SVCollector_results_greedy)
+```
+
+### TopN
+
+```{r}
+mode = "topN"
+SVCollector_output = paste0(work_dir, cohort, ".raw.vcf.", mode)
+SVCollector_results_topN = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV"))
+SVCollector_results_topN$Genotyped = "No"
+SVCollector_results_topN.gt = paste0(work_dir, cohort, ".gt.vcf.", mode)
+SVCollector_results_topN.gt = read.table(SVCollector_results_topN.gt, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV")) 
+SVCollector_results_topN.gt$Genotyped = "Yes"
+ 
+SVCollector_results_topN = rbind(SVCollector_results_topN,SVCollector_results_topN.gt)
+createDT(SVCollector_results_topN)
+```
+
+```{r}
+SVCollector_results_greedy$mode = "greedy"
+SVCollector_results_topN$mode = "topN"
+ROSMAP = rbind(SVCollector_results_greedy,
+             SVCollector_results_topN)
+```
+
+## MSBB {.tabset .tabset-fade .tabset-pills}
+
+```{r}
+cohort = "MSBB"
+```
+
+**Samples ancestries**
+
+Getting only Europeans
+
+```{r message=F, warning=F, results='hide', fig.keep='last', dpi=600, fig.width=22, fig.height=13}
+a = plot_samples_ancestry(MSBB_samples_to_use, label="MSBB-EUR")
+```
+
+### Greedy
+
+```{r}
+mode = "greedy"
+SVCollector_output = paste0(work_dir, cohort, ".raw.vcf.", mode)
+SVCollector_results_greedy = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV"))
+SVCollector_results_greedy$Genotyped = "No"
+SVCollector_output.gt = paste0(work_dir, cohort, ".gt.vcf.", mode)
+SVCollector_results_greedy.gt = read.table(SVCollector_output.gt, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV")) 
+SVCollector_results_greedy.gt$Genotyped = "Yes"
+
+#SVCollector_results_greedy = melt(rbind(SVCollector_results_greedy,SVCollector_results_greedy.gt),id.vars = c("Sample","Genotyped"))
+SVCollector_results_greedy = rbind(SVCollector_results_greedy,SVCollector_results_greedy.gt)
+createDT(SVCollector_results_greedy)
+```
+
+### TopN
+
+```{r}
+mode = "topN"
+SVCollector_output = paste0(work_dir, cohort, ".raw.vcf.", mode)
+SVCollector_results_topN = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV"))
+SVCollector_results_topN$Genotyped = "No"
+SVCollector_results_topN.gt = paste0(work_dir, cohort, ".gt.vcf.", mode)
+SVCollector_results_topN.gt = read.table(SVCollector_results_topN.gt, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV")) 
+SVCollector_results_topN.gt$Genotyped = "Yes"
+ 
+SVCollector_results_topN = rbind(SVCollector_results_topN,SVCollector_results_topN.gt)
+createDT(SVCollector_results_topN)
+```
+
+```{r}
+SVCollector_results_greedy$mode = "greedy"
+SVCollector_results_topN$mode = "topN"
+MSBB = rbind(SVCollector_results_greedy,
+             SVCollector_results_topN)
+```
+
+
+# Merged Results (FINAL)
+
+# ROSMAP
+
+```{r message=FALSE, warning=FALSE}
+ROSMAP_metadata = read.table(paste0(ROSMAP_path,"Data/WGS_Metadata.txt"), header = T, stringsAsFactors = F, check.names = F)
+ROSMAP_Ancestry = read.csv(paste0(ROSMAP_path,"01_GeneticPC/pca.ancestry_prediction.csv"), header = T, stringsAsFactors = F, check.names = F, comment.char = "")
+ROSMAP_RNASeq = read.table(paste0(ROSMAP_path,"Data/RNAseq_WGS_Metadata.txt"), header = T, stringsAsFactors = F, check.names = F)
+ROSMAP_Proteins = read.csv(paste0(ROSMAP_path,"rosmap/ROSMAP_proteomics_TMT_11_18_2019/rosmap_50batch_specimen_metadata_for_batch_correction.csv"), header = T, stringsAsFactors = F, check.names = F)
+ROSMAP_h3k9ac = read.table(paste0(ROSMAP_path,"rosmap/h3k9ac_design.csv"), header = T, stringsAsFactors = F, check.names = F, sep="\t")
+ROSMAP_ChIPseq = read.csv(paste0(ROSMAP_path,"rosmap/ROSMAP_ChIPseq_metaData.csv"), header = T, stringsAsFactors = F, check.names = F)
+ROSMAP_scRNASeq = read.table("~/ad-omics/data/amp-ad/scRNASeq/scRNAseq.id", header = T, stringsAsFactors = F, check.names = F)
+
+top_ROSMAP = ROSMAP %>% filter(mode=="greedy" & Genotyped=="No")
+top_ROSMAP$greedy_rank = match(top_ROSMAP$Sample, ROSMAP[ROSMAP$mode=="greedy" & ROSMAP$Genotyped=="No","Sample"])
+top_ROSMAP$greedy_rank.gt = match(top_ROSMAP$Sample, ROSMAP[ROSMAP$mode=="greedy" & ROSMAP$Genotyped=="Yes","Sample"])
+top_ROSMAP$topN_rank = match(top_ROSMAP$Sample, ROSMAP[ROSMAP$mode=="topN" & ROSMAP$Genotyped=="No","Sample"])
+top_ROSMAP$topN_rank.gt = match(top_ROSMAP$Sample, ROSMAP[ROSMAP$mode=="topN" & ROSMAP$Genotyped=="Yes","Sample"])
+
+top_ROSMAP = inner_join(top_ROSMAP, ROSMAP_metadata, by=c("Sample" = "wgs_id"))
+top_ROSMAP2 = inner_join(top_ROSMAP, ROSMAP_Ancestry, by=c("Sample" = "#sample"))
+
+MAPT_INV = system(paste0("ml bcftools; bcftools filter -r 17:43649098-44338906 ", ROSMAP_path,"05_MergedSamples/fromSMOOVE/samples_merged_INV.Final.vcf.gz" ," | bcftools view -s ", paste0(unique(top_ROSMAP2$Sample),collapse = ","), " > ", work_dir, "ROSMAP.MAPT.INV.vcf"), intern = T)
+MAPT_INV = read.vcfR(paste0( work_dir, "ROSMAP.MAPT.INV.vcf" ), verbose = F)
+MAPT_INV_GT = as.data.frame(gsub("(.*?):(.*)","\\1",MAPT_INV@gt[,-1]))
+MAPT_INV_DF = data.frame(MAPT_INV = colSums(as.data.frame(MAPT_INV_GT == "0/1"))>0)
+MAPT_INV_DF$Sample = rownames(MAPT_INV_DF)
+
+top_ROSMAP3 = inner_join(top_ROSMAP2, MAPT_INV_DF, by="Sample")
+
+top_ROSMAP3$RNAseq = top_ROSMAP3$Sample%in%ROSMAP_RNASeq$wgs_id
+top_ROSMAP3$Proteins = top_ROSMAP3$projid%in%ROSMAP_Proteins$projid
+top_ROSMAP3$h3k9ac = top_ROSMAP3$projid%in%ROSMAP_h3k9ac$ProjID
+top_ROSMAP3$ChIPseq = top_ROSMAP3$projid%in%ROSMAP_ChIPseq$SampleID
+top_ROSMAP3$scRNAseq = top_ROSMAP3$projid%in%ROSMAP_scRNASeq$individualID
+
+top_ROSMAP4 = top_ROSMAP3 %>% dplyr::select(Sample, projid, RNAseq, Proteins, h3k9ac, ChIPseq, scRNAseq, MAPT_INV, greedy_rank, greedy_rank.gt, topN_rank, topN_rank.gt, study, msex, pmi, apoe_genotype, age_death, cts_mmse30, dcfdx, ad_reagan, braaksc, ceradsc, cogdx, EUR, EAS, AMR, SAS, AFR)
+
+createDT(top_ROSMAP4)
+```
+
+# MSBB
+
+```{r message=FALSE, warning=FALSE}
+MSBB_metadata = read.table(paste0(MSBB_path,"Data/WGS_Metadata.txt"), header = T, stringsAsFactors = F, check.names = F)
+#MSBB_IDs = read.table(paste0(MSBB_path,"msbb/AMP-AD_MSBB_WGS__sample_barcode_brainBankID..tsv"), header = T, stringsAsFactors = F, check.names = F)
+MSBB_Ancestry = read.csv(paste0(MSBB_path,"01_GeneticPC/pca.ancestry_prediction.csv"), header = T, stringsAsFactors = F, check.names = F, comment.char = "")
+
+top_MSBB = MSBB %>% filter(mode=="greedy" & Genotyped=="No")
+top_MSBB$greedy_rank = match(top_MSBB$Sample, MSBB[MSBB$mode=="greedy" & MSBB$Genotyped=="No","Sample"])
+top_MSBB$greedy_rank.gt = match(top_MSBB$Sample, MSBB[MSBB$mode=="greedy" & MSBB$Genotyped=="Yes","Sample"])
+top_MSBB$topN_rank = match(top_MSBB$Sample, MSBB[MSBB$mode=="topN" & MSBB$Genotyped=="No","Sample"])
+top_MSBB$topN_rank.gt = match(top_MSBB$Sample, MSBB[MSBB$mode=="topN" & MSBB$Genotyped=="Yes","Sample"])
+
+top_MSBB = inner_join(top_MSBB, MSBB_metadata, by=c("Sample" = "WGS"))
+top_MSBB2 = inner_join(top_MSBB, MSBB_Ancestry, by=c("Sample" = "#sample"))
+
+MAPT_INV = system(paste0("ml bcftools; bcftools filter -r 17:43649098-44338906 ", MSBB_path,"05_MergedSamples/fromSMOOVE/samples_merged_INV.Final.vcf.gz" ," | bcftools view -s ", paste0(unique(top_MSBB2$Sample),collapse = ","), " > ", work_dir, "MSBB.MAPT.INV.vcf"), intern = T)
+MAPT_INV = read.vcfR(paste0( work_dir, "MSBB.MAPT.INV.vcf" ), verbose = F)
+MAPT_INV_GT = as.data.frame(gsub("(.*?):(.*)","\\1",MAPT_INV@gt[,-1]))
+MAPT_INV_DF = data.frame(MAPT_INV = colSums(as.data.frame(MAPT_INV_GT == "0/1"))>0)
+MAPT_INV_DF$Sample = as.numeric(rownames(MAPT_INV_DF))
+
+top_MSBB3 = inner_join(top_MSBB2, MAPT_INV_DF, by="Sample")
+
+top_MSBB4 = top_MSBB3 %>% dplyr::select(Sample, individualIdentifier, greedy_rank, greedy_rank.gt, topN_rank, topN_rank.gt, SEX, PMI, Apo1, Apo2, AOD, CDR, NP.1, PlaqueMean, bbscore, MAPT_INV, EUR, EAS, AMR, SAS, AFR)
+createDT(top_MSBB4)
+```
+
+# Session info
+
+```{r}
+sessionInfo()
+```

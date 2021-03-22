@@ -1,0 +1,430 @@
+---
+title: "SV Validation"
+author: |
+  | Ricardo A. Vialle
+  | Raj Lab
+  | Department of Neuroscience
+  | Icahn School of Medicine at Mount Sinai
+  | NYC, New York
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_document:
+    theme: spacelab
+    highlight: zenburn
+    code_folding: hide
+    toc: true
+    toc_float: true
+    df_print: paged
+    smooth_scroll: true
+    number_sections: false
+    self_contained: true
+---
+
+<!-- Justify texts in the page --> 
+<style>
+body {
+text-align: justify}
+</style>
+
+<a href="https://rajlabmssm.github.io/AMP_AD_StructuralVariation/analysis/long_read_validation/">Back to Repo</a>
+
+***
+
+```{r setup, message=F, warning=F}
+## Setup, Load Libraries & Report Versions
+knitr::opts_chunk$set(echo = TRUE)
+
+get_os <- function(){
+  sysinf <- Sys.info()
+  if (!is.null(sysinf)){
+    os <- sysinf['sysname']
+    if (os == 'Darwin')
+      os <- "osx"
+  } else { ## mystery machine
+    os <- .Platform$OS.type
+    if (grepl("^darwin", R.version$os))
+      os <- "osx"
+    if (grepl("linux-gnu", R.version$os))
+      os <- "linux"
+    if (grepl("mingw", R.version$os))
+      os <- "windows"
+  }
+  tolower(os)
+}
+
+if (get_os()=="windows"){
+  home_folder = "Z:~/viallr01/"
+}else{
+  home_folder = "~/"
+}
+
+
+## Load Libraries ------------------- 
+## IMPORTANT!
+## Please check the paths and files in the file "load_packages_and_functions.R" before running this!
+## All .R files must be in the same folder, specified below in 'lib_folder'
+lib_folder = paste0(home_folder,"ad-omics/ricardo/MyRepo/structuralvariation/R_Library/")
+source(paste0(lib_folder,"load_packages_and_functions.R"))
+```
+
+# Long read SV results 
+
+QC results for two ROSMAP samples sequenced using PacBio CLR (Sequel 2)
+
+## SM_CJEK6
+
+```{r warning=FALSE, message=FALSE, results='hide', fig.keep='all', dpi=300, fig.width=7, fig.height=3}
+p_load(magick)
+
+results_path = paste0(home_folder,"ad-omics/ricardo/ROSMAP_LongRead/SV_Analysis/00_QC/raw/")
+
+ggdraw() + draw_image(paste0(results_path,"SM_CJEK6","/HistogramReadlength.png"), scale = 1)
+```
+
+```{r}
+stats = read.delim2(paste0(results_path,"SM_CJEK6","/NanoStats.txt"))
+data.frame(Summary = gsub("(.*):(.*)","\\1",stats[1:7,]), Value = gsub("(.*):(.*)","\\2",stats[1:7,]) %>% trim.spaces())
+```
+
+## SM_CJK3B
+
+```{r warning=FALSE, message=FALSE, results='hide', fig.keep='all', dpi=300, fig.width=7, fig.height=3}
+results_path = paste0(home_folder,"ad-omics/ricardo/ROSMAP_LongRead/SV_Analysis/00_QC/raw/")
+
+ggdraw() + draw_image(paste0(results_path,"SM_CJK3B","/HistogramReadlength.png"), scale = 1)
+```
+
+```{r}
+stats = read.delim2(paste0(results_path,"SM_CJK3B","/NanoStats.txt"))
+data.frame(Summary = gsub("(.*):(.*)","\\1",stats[1:7,]), Value = gsub("(.*):(.*)","\\2",stats[1:7,]) %>% trim.spaces())
+```
+
+## SV calls using SVIM (not filtered)
+
+```{r warning=FALSE, message=FALSE, results='hide', fig.keep='all', dpi=300, fig.width=7, fig.height=6}
+samples.id = c("SM_CJEK6","SM_CJK3B")
+results_path = paste0(home_folder,"ad-omics/ricardo/ROSMAP_LongRead/SV_Analysis/")
+
+p_load(magick)
+
+plot_sample <- list()
+for (sampleID in samples.id){
+  p1 <- ggdraw() + draw_image(paste0(results_path,"01_mapping/h37/",sampleID,".svim/sv-genotypes-q5.png"), scale = 1)
+  p2 <- ggdraw() + draw_image(paste0(results_path,"01_mapping/h37/",sampleID,".svim/sv-lengths-q5.png"), scale = 1)
+  
+  title <- ggdraw() + 
+    draw_label(
+      sampleID,
+      fontface = 'bold',
+      x = 0,
+      hjust = 0
+    ) + theme(plot.margin = margin(0, 0, 0, 7))
+  
+  plot_row <- plot_grid(p1, p2)
+  
+  plot_sample[[sampleID]] <- plot_grid(title, plot_row,
+          ncol = 1,
+          rel_heights = c(0.1, 1))
+}
+plot_grid(plotlist = plot_sample, ncol = 1)
+```
+
+# Benchmarking
+
+```{bash, eval=F, echo=F}
+conda activate longReadSV-pipeline2
+ml R/3.6.2 bedtools bcftools picard samtools parallel
+
+#######################################################################################
+### Prepare the data ###
+#######################################################################################
+
+# Extract any genomic region that do NOT overlap with repeats
+zcat ~/ad-omics/ricardo/Data/1000G_phase1/intervalsList.bed.gz | awk '/^[0-9]*\t/' > genome.hg19.bed
+bedtools subtract -a genome.hg19.bed -b repeats.hg19.bed | sort -k1,1 -k2,2n -k3,3n > genome.noRepeats.bed
+
+## Merge regions with simple repeats, segmental duplications
+cut -f1-3 ~/ad-omics/ricardo/Data/1000G_phase1/simpleRepeats.hg19.bed | sed 's/chr//' | awk '/^[0-9]*\t/' > simpleRepeats.hg19.bed
+cut -f1-3 ~/ad-omics/ricardo/Data/1000G_phase1/segmental_dups.hg19.bed | sed 's/chr//'| awk '/^[0-9]*\t/' > segmental_dups.hg19.bed
+cut -f1-3 ~/ad-omics/ricardo/Data/1000G_phase1/filtered_regions_hg19.bed | awk '/^[0-9]*\t/' > filtered_regions.hg19.bed
+cat filtered_regions.hg19.bed simpleRepeats.hg19.bed segmental_dups.hg19.bed | sort -k1,1 -k2,2n -k3,3n > repeats.hg19.tmp.bed
+bedtools merge -d 1000 -i repeats.hg19.tmp.bed | sort -k1,1 -k2,2n -k3,3n > repeats.hg19.bed
+rm repeats.hg19.tmp.bed
+
+## Select high coverage regions from long reads (>=10 reads of coverage)
+cd ~/viallr01/ad-omics/ricardo/ROSMAP_LongRead/ShortRead_results
+
+samples=( "SM_CJK3B" "SM_CJEK6" )
+aligners=( "ngmlr" "mm2" )
+for sample in "${samples[@]}"; do
+  for aligner in "${aligners[@]}"; do
+  echo "bedtools genomecov -ibam ${sample}.${aligner}.sorted.bam -bg > ${sample}.${aligner}.bedgraph; \
+    awk '$4 >= 5' ${sample}.${aligner}.bedgraph > ${sample}.${aligner}.gt5.bedgraph; \
+    awk '$4 >= 10' ${sample}.${aligner}.bedgraph > ${sample}.${aligner}.gt10.bedgraph; \
+    bedtools merge -d 1000 -i ${sample}.${aligner}.gt10.bedgraph > ${sample}.${aligner}.gt10.merge1000bp.bed; \
+    bedtools merge -d 1000 -i ${sample}.${aligner}.gt5.bedgraph > ${sample}.${aligner}.gt5.merge1000bp.bed; \
+    bedtools merge -d 1000 -i ${sample}.${aligner}.bedgraph > ${sample}.${aligner}.merge1000bp.bed" | bsub -n 1 -R 'span[hosts=1]' -R 'rusage[mem=64000]' -P acc_ad-omics -W 12:00 -oo ${sample}.${aligner}.cov.out -eo ${sample}.${aligner}.cov.err
+  done
+done
+
+# Extract regions by coverage threshold and that do NOT overlap with repeats
+for sample in "${samples[@]}"; do
+  for aligner in "${aligners[@]}"; do
+    bedtools subtract -a ${sample}.${aligner}.merge1000bp.bed -b repeats.hg19.bed | sort -k1,1 -k2,2n -k3,3n > ${sample}.${aligner}.merge1000bp.noRepeats.bed
+    bedtools subtract -a ${sample}.${aligner}.gt5.merge1000bp.bed -b repeats.hg19.bed | sort -k1,1 -k2,2n -k3,3n > ${sample}.${aligner}.gt5.merge1000bp.noRepeats.bed
+    bedtools subtract -a ${sample}.${aligner}.gt10.merge1000bp.bed -b repeats.hg19.bed | sort -k1,1 -k2,2n -k3,3n > ${sample}.${aligner}.gt10.merge1000bp.noRepeats.bed
+  done
+done
+```
+
+```{bash, eval=F, echo=F}
+ml R/3.6.2 bedtools bcftools picard samtools parallel
+
+#######################################################################################
+### Process long read data ###
+#######################################################################################
+# SVIM
+cd ~/viallr01/ad-omics/ricardo/ROSMAP_LongRead/ShortRead_results/svim
+
+samples=( "SM_CJK3B" "SM_CJEK6" )
+for sample in "${samples[@]}"; do
+  cp ../../SV_Analysis/02_svDiscovery/h37/${sample}.ngmlr.svim/variants.vcf ${sample}.ngmlr.svim.raw.vcf
+  java -jar $PICARD FixVcfHeader I=${sample}.ngmlr.svim.raw.vcf O=${sample}.ngmlr.svim.raw.tmp1.vcf
+  bcftools view -i 'GT[*]="alt"' ${sample}.ngmlr.svim.raw.tmp1.vcf | bcftools sort -Oz -o ${sample}.ngmlr.svim.raw.vcf.gz
+  rm ${sample}.ngmlr.svim.raw.tmp1.vcf
+  
+  tabix -p vcf ${sample}.ngmlr.svim.raw.vcf.gz
+
+  Rscript ~/viallr01/ad-omics/ricardo/MyRepo/structuralvariation/R_Library/splitVCF_by_SVTYPE.R ${sample}.ngmlr.svim.raw.vcf.gz ${sample}.ngmlr.svim.raw
+done
+
+samples=( "SM_CJK3B" "SM_CJEK6" )
+for sample in "${samples[@]}"; do
+  cp ~/viallr01/ad-omics/ricardo/ROSMAP_LongRead/SV_Analysis/02_svDiscovery/h37/${sample}.ngmlr.svim.sorted.vcf ${sample}.ngmlr.svim.vcf
+  java -jar $PICARD FixVcfHeader I=${sample}.ngmlr.svim.vcf O=${sample}.ngmlr.svim.tmp1.vcf
+  bcftools view -i 'GT[*]="alt"' ${sample}.ngmlr.svim.tmp1.vcf | bcftools sort -Oz -o ${sample}.ngmlr.svim.final.vcf.gz
+  rm ${sample}.ngmlr.svim.tmp1.vcf
+  
+  tabix -p vcf ${sample}.ngmlr.svim.final.vcf.gz
+  
+  Rscript ~/viallr01/ad-omics/ricardo/MyRepo/structuralvariation/R_Library/splitVCF_by_SVTYPE.R ${sample}.ngmlr.svim.final.vcf.gz ${sample}.ngmlr.svim.final
+done
+
+# SNIFFLES
+cd ~/viallr01/ad-omics/ricardo/ROSMAP_LongRead/ShortRead_results/sniffles
+
+samples=( "SM_CJK3B" "SM_CJEK6" )
+for sample in "${samples[@]}"; do
+  cp ../../SV_Analysis/02_svDiscovery/h37/${sample}.ngmlr.sniffles.sorted.vcf ${sample}.ngmlr.sniffles.raw1.vcf
+  java -jar $PICARD FixVcfHeader I=${sample}.ngmlr.sniffles.raw1.vcf O=${sample}.ngmlr.sniffles.raw.vcf
+  rm ${sample}.ngmlr.sniffles.raw1.vcf
+  bcftools view -i 'GT[*]="alt"' ${sample}.ngmlr.sniffles.raw.vcf | bcftools sort -Oz -o ${sample}.ngmlr.sniffles.vcf.gz
+  rm ${sample}.ngmlr.sniffles.raw.vcf
+  
+  tabix -p vcf ${sample}.ngmlr.sniffles.vcf.gz
+  
+  Rscript ~/viallr01/ad-omics/ricardo/MyRepo/structuralvariation/R_Library/splitVCF_by_SVTYPE.R ${sample}.ngmlr.sniffles.vcf.gz ${sample}.ngmlr.sniffles
+done
+
+# PBSV
+cd ~/viallr01/ad-omics/ricardo/ROSMAP_LongRead/ShortRead_results/pbsv
+
+samples=( "SM_CJK3B" "SM_CJEK6" )
+for sample in "${samples[@]}"; do
+  cp ../../SV_Analysis/02_svDiscovery/h37/${sample}.pbsv.vcf ${sample}.pbsv.raw.vcf
+  bcftools view -i 'GT[*]="alt"' ${sample}.pbsv.raw.vcf | bcftools sort -Oz -o ${sample}.pbsv.vcf.gz
+  
+  tabix -p vcf ${sample}.pbsv.vcf.gz
+  
+  Rscript ~/viallr01/ad-omics/ricardo/MyRepo/structuralvariation/R_Library/splitVCF_by_SVTYPE.R ${sample}.pbsv.vcf.gz ${sample}.pbsv
+done
+
+# Merged Long-reads
+cd ~/viallr01/ad-omics/ricardo/ROSMAP_LongRead/ShortRead_results/long_reads
+
+samples=( "SM_CJK3B" "SM_CJEK6" )
+svtypes=( "DEL" "DUP" "INS" "INV" )
+for sample in "${samples[@]}"; do
+  for svtype in "${svtypes[@]}"; do
+    cp ../svim/${sample}.ngmlr.svim.raw.${svtype}.vcf.gz ../sniffles/${sample}.ngmlr.sniffles.${svtype}.vcf.gz ../pbsv/${sample}.pbsv.${svtype}.vcf.gz .
+    echo "$(bcftools query -l ${sample}.ngmlr.sniffles.${svtype}.vcf.gz)\t${sample}" > rename_samples.txt
+    bcftools reheader --samples rename_samples.txt -o ${sample}.ngmlr.sniffles.${svtype}.vcf.gz2 ${sample}.ngmlr.sniffles.${svtype}.vcf.gz
+    mv ${sample}.ngmlr.sniffles.${svtype}.vcf.gz2 ${sample}.ngmlr.sniffles.${svtype}.vcf.gz
+
+    gunzip -f ${sample}.*.${svtype}.vcf.gz
+    
+    sed -i 's/DUP:INT/DUP/g' ${sample}.ngmlr.svim.raw.${svtype}.vcf
+    svtk standardize ${sample}.ngmlr.svim.raw.${svtype}.vcf ${sample}.svim.${svtype}.std.vcf manta
+    sed -i 's/manta/svim/g' ${sample}.svim.${svtype}.std.vcf
+    bcftools sort ${sample}.svim.${svtype}.std.vcf > ${sample}.svim.${svtype}.std.sorted.vcf
+    
+    svtk standardize ${sample}.ngmlr.sniffles.${svtype}.vcf ${sample}.sniffles.${svtype}.std.vcf smoove
+    sed -i 's/smoove/sniffles/g' ${sample}.sniffles.${svtype}.std.vcf
+    bcftools sort ${sample}.sniffles.${svtype}.std.vcf > ${sample}.sniffles.${svtype}.std.sorted.vcf
+    
+    svtk standardize ${sample}.pbsv.${svtype}.vcf ${sample}.pbsv.${svtype}.std.vcf manta
+    sed -i 's/manta/pbsv/g' ${sample}.pbsv.${svtype}.std.vcf
+    bcftools sort ${sample}.pbsv.${svtype}.std.vcf > ${sample}.pbsv.${svtype}.std.sorted.vcf
+    
+    ls ${sample}.*.${svtype}.std.sorted.vcf > vcf.${sample}.${svtype}.list
+    #svtk vcfcluster -d 1000 -f 0.5 vcf.${sample}.${svtype}.list ${sample}.${svtype}.longReadsMerged.vcf
+    SURVIVOR merge vcf.${sample}.${svtype}.list 1000 0 -1 -1 -1 -1 ${sample}.${svtype}.longReadsMerged.vcf
+    bcftools sort -Oz -o ${sample}.${svtype}.longReadsMerged.vcf.gz ${sample}.${svtype}.longReadsMerged.vcf 
+    tabix -p vcf ${sample}.${svtype}.longReadsMerged.vcf.gz
+  done
+done
+
+```
+
+```{bash, eval=F, echo=F}
+ml R/3.6.2 bedtools bcftools picard samtools parallel
+
+#######################################################################################
+### Process short read calls ###
+#######################################################################################
+## Process final cohort genotyped calls for each sample
+cd ~/viallr01/ad-omics/ricardo/ROSMAP_LongRead/ShortRead_results/final_gt
+
+bcftools view -s SM-CJEK6 ~/ad-omics/ricardo/AMP_AD/ROSMAP/ROSMAP_ALL.allCohort.vcf.gz | bcftools view -i 'GT[*]="alt"' | bcftools sort -Oz -o SM_CJEK6.gt.vcf.gz
+bcftools view -s SM-CJK3B ~/ad-omics/ricardo/AMP_AD/ROSMAP/ROSMAP_ALL.allCohort.vcf.gz | bcftools view -i 'GT[*]="alt"' | bcftools sort -Oz -o SM_CJK3B.gt.vcf.gz
+
+tabix -p vcf SM_CJEK6.gt.vcf.gz
+tabix -p vcf SM_CJK3B.gt.vcf.gz
+
+Rscript ~/viallr01/ad-omics/ricardo/MyRepo/structuralvariation/R_Library/splitVCF_by_SVTYPE.R SM_CJEK6.gt.vcf.gz SM_CJEK6.gt
+Rscript ~/viallr01/ad-omics/ricardo/MyRepo/structuralvariation/R_Library/splitVCF_by_SVTYPE.R SM_CJK3B.gt.vcf.gz SM_CJK3B.gt
+
+# Benchmark with Vapor
+samples=( "SM_CJK3B" "SM_CJEK6" )
+svtypes=( "DEL" "DUP" "INS" "INV" )
+for sample in "${samples[@]}"; do
+  for svtype in "${svtypes[@]}"; do
+  
+    if [ "$svtype" = "INS" ]; then
+      bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%SVTYPE\_%SVLEN\n' ${sample}.gt.${svtype}.vcf.gz | sed 's/-//g' > ${sample}.gt.${svtype}.bed
+    else
+      bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%SVTYPE\n' ${sample}.gt.${svtype}.vcf.gz > ${sample}.gt.${svtype}.bed
+    fi
+    
+    bedtools intersect -v -a ${sample}.gt.${svtype}.bed -b ../${sample}.gt10.merge1000bp.noRepeats.bed > ${sample}.gt.${svtype}.filt.bed
+
+    echo "rm -rf ${sample}_vapor_${svtype}; vapor bed --sv-input ${sample}.gt.${svtype}.filt.bed --output-path ${sample}_vapor_${svtype}/ --reference ~/ad-omics/ricardo/Data/bayestyper_GRCh37_bundle_v1.3/GRCh37_canon.fa --pacbio-input ~/ad-omics/ricardo/ROSMAP_LongRead/data/${sample}.corrected.longRead.sorted.bam" | bsub -n 1 -R 'span[hosts=1]' -R 'rusage[mem=4000]' -P acc_ad-omics -W 12:00 -oo ${sample}_vapor_${svtype}.out -eo ${sample}_vapor_${svtype}.err
+   
+  done
+done
+```
+
+# Vapor
+
+```{r message=F, warning=F, results='hide', fig.keep='last', dpi=300, fig.width=3.2, fig.height=3}
+bench_dir = paste0(home_folder,"ad-omics/ricardo/ROSMAP_LongRead/ShortRead_results/final_gt/")
+svtypes = c("DEL","DUP","INS","INV")
+
+## INVs are mixed with complex SVs. We aggregate measures for INVs + different complex types
+# ml R/3.6.2 bedtools bcftools picard samtools parallel
+# samples=( "SM_CJK3B" "SM_CJEK6" )
+# svtypes=( "DUP_INV" "DEL_INV" "DEL_DUP_INV" "DISDUP" )
+# for sample in "${samples[@]}"; do
+#   for svtype in "${svtypes[@]}"; do
+#     sed "s/INV/${svtype}/g" ${sample}.gt.INV.filt.bed > ${sample}.gt.${svtype}.filt.bed
+#     echo "rm -rf ${sample}_vapor_${svtype}; vapor bed --sv-input ${sample}.gt.${svtype}.filt.bed --output-path ${sample}_vapor_${svtype}/ --reference ~/ad-omics/ricardo/Data/bayestyper_GRCh37_bundle_v1.3/GRCh37_canon.fa --pacbio-input ~/ad-omics/ricardo/ROSMAP_LongRead/ShortRead_results/${sample}.mm2.sorted.bam" | bsub -n 1 -R 'span[hosts=1]' -R 'rusage[mem=4000]' -P acc_ad-omics -W 12:00 -oo ${sample}_vapor_${svtype}.out -eo ${sample}_vapor_${svtype}.err
+#   done
+# done
+
+# SM_CJK3B
+vapor_res = list()
+
+for (svtype in svtypes){
+  vapor_tmp0 = read.table(paste0(bench_dir,"SM_CJK3B.gt.",svtype,".filt.bed.vapor"), header = T) 
+  if(svtype == "INV"){
+    vapor_tmp_cpx = vapor_tmp0 %>% mutate(conf = VaPoR_GS>0 | VaPoR_GT!="0/0")
+
+    cpx_types = c("DUP_INV","DEL_INV","DEL_DUP_INV","DISDUP")
+    
+    for(cpx_type in cpx_types){
+      vapor_tmp_cpx0 = read.table(paste0(bench_dir,"SM_CJK3B.gt.",cpx_type,".filt.bed.vapor"), header = T) 
+      vapor_tmp_cpx1 = vapor_tmp_cpx0 %>% mutate(conf = VaPoR_GS>0 | VaPoR_GT!="0/0")
+      vapor_tmp_cpx$conf = vapor_tmp_cpx$conf | vapor_tmp_cpx1$conf
+    }
+    
+  vapor_tmp_cpx$VaPoR_GS[vapor_tmp_cpx$conf] <- 1
+  vapor_tmp_cpx$VaPoR_GT[vapor_tmp_cpx$conf] <- "0/1"
+  vapor_res[[svtype]] = vapor_tmp_cpx
+    
+  }else{
+    vapor_tmp0$conf = T
+    vapor_res[[svtype]] = vapor_tmp0
+  }
+}
+
+df_vapor = data.frame(Sample = "SM_CJK3B", SVTYPE = names(vapor_res), N = sapply(vapor_res, nrow))
+
+df_conf_rate = Reduce(full_join, vapor_res) %>% drop_na() %>% group_by(SVTYPE) %>% dplyr::summarise(Sample = "SM_CJK3B", avg = (sum(VaPoR_GS>0 | VaPoR_GT!="0/0")/length(VaPoR_GS)), n = n())
+
+df_conf_rate = rbind(df_conf_rate , Reduce(full_join, vapor_res) %>% drop_na() %>% dplyr::summarise(Sample = "SM_CJK3B", SVTYPE = "ALL", avg = (sum(VaPoR_GS>0 | VaPoR_GT!="0/0")/length(VaPoR_GS)), n = n()))
+
+# SM_CJEK6
+
+vapor_res = list()
+for (svtype in svtypes){
+  vapor_tmp0 = read.table(paste0(bench_dir,"SM_CJEK6.gt.",svtype,".filt.bed.vapor"), header = T) 
+  if(svtype == "INV"){
+    vapor_tmp_cpx = vapor_tmp0 %>% mutate(conf = VaPoR_GS>0 | VaPoR_GT!="0/0")
+    cpx_types = c("DUP_INV","DEL_INV","DEL_DUP_INV","DISDUP")
+    for(cpx_type in cpx_types){
+      vapor_tmp_cpx0 = read.table(paste0(bench_dir,"SM_CJEK6.gt.",cpx_type,".filt.bed.vapor"), header = T) 
+      vapor_tmp_cpx1 = vapor_tmp_cpx0 %>% mutate(conf = VaPoR_GS>0 | VaPoR_GT!="0/0")
+      vapor_tmp_cpx$conf = vapor_tmp_cpx$conf | vapor_tmp_cpx1$conf
+    }
+    
+  vapor_tmp_cpx$VaPoR_GS[vapor_tmp_cpx$conf] <- 1
+  vapor_tmp_cpx$VaPoR_GT[vapor_tmp_cpx$conf] <- "0/1"
+  vapor_res[[svtype]] = vapor_tmp_cpx
+    
+  }else{
+    vapor_tmp0$conf = T
+    vapor_res[[svtype]] = vapor_tmp0
+  }
+}
+
+df_vapor = rbind(df_vapor,data.frame(Sample = "SM_CJEK6", SVTYPE = names(vapor_res), N = sapply(vapor_res, nrow)))
+
+df_conf_rate = rbind(df_conf_rate, Reduce(full_join, vapor_res) %>% drop_na() %>% group_by(SVTYPE) %>% dplyr::summarise(Sample = "SM_CJEK6", avg = (sum(VaPoR_GS>0 | VaPoR_GT!="0/0")/length(VaPoR_GS)), n = n()))
+
+df_conf_rate = rbind(df_conf_rate, Reduce(full_join, vapor_res) %>% drop_na() %>% dplyr::summarise(Sample = "SM_CJEK6", SVTYPE = "ALL", avg = (sum(VaPoR_GS>0 | VaPoR_GT!="0/0")/length(VaPoR_GS)), n = n()))
+
+# Prepare plot
+df_conf_rate$SVTYPE = as.character(df_conf_rate$SVTYPE)
+df_conf_rate$SVTYPE[df_conf_rate$SVTYPE=="TANDUP"] <- "DUP"
+df_conf_rate$SVTYPE = factor(df_conf_rate$SVTYPE, level = c("ALL","DEL","DUP","INS","INV"))
+df_conf_rate_avg = df_conf_rate %>% group_by(SVTYPE) %>% dplyr::summarise(avg = median(avg))
+
+c.1 <- ggplot(df_conf_rate[df_conf_rate$SVTYPE!="ALL",], aes(y = Sample, x = n, fill = SVTYPE)) +
+  geom_bar(stat = "identity", position = "stack", color = "black", width = .7) +
+  scale_fill_npg() + 
+  theme_tufte(base_family = "Helvetica") +
+  scale_x_continuous(breaks = c(0, 500, 1000, 1500),
+                     label = c("0", "500", "1k", "1.5k")) +
+  labs(x = "Number of SVs evaluated", y = "Sample", fill = NULL) +
+  easy_remove_legend()
+
+c.2 <- ggplot(df_conf_rate, aes(y = avg, x = SVTYPE)) +
+  geom_point(alpha = 0.6) +
+  stat_summary(fun.y = median, 
+               geom = "crossbar", 
+               width = 0.5,
+               color = "#CB454A") +
+  geom_vline(xintercept= 1.5, colour = "gray") +
+  geom_text(data = df_conf_rate_avg, aes(label = scales::percent(avg), y = avg+.1),size = 3.5) +
+  theme_tufte(base_family = "Helvetica") +
+  expand_limits(y = c(0.3,1.1)) +
+  labs(y = "Confirmation Rate", x = "SV type")
+
+ggarrange(c.1, c.2, heights = c(1,1.5), ncol = 1, nrow = 2)
+```
+
+# Session info
+
+```{r}
+sessionInfo()
+```

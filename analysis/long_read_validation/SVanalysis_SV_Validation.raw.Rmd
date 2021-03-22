@@ -1,0 +1,324 @@
+---
+title: "SV Validation"
+author: |
+  | Ricardo A. Vialle
+  | Raj Lab
+  | Department of Neuroscience
+  | Icahn School of Medicine at Mount Sinai
+  | NYC, New York
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_document:
+    theme: spacelab
+    highlight: zenburn
+    code_folding: hide
+    toc: true
+    toc_float: true
+    df_print: paged
+    smooth_scroll: true
+    number_sections: false
+    self_contained: true
+---
+
+<!-- Justify texts in the page --> 
+<style>
+body {
+text-align: justify}
+</style>
+
+<a href="https://github.com/RajLabMSSM/StructuralVariation">Back to Repo</a>
+
+***
+
+```{r setup, message=F, warning=F}
+## Setup, Load Libraries & Report Versions
+knitr::opts_chunk$set(echo = TRUE)
+
+## Load Libraries ------------------- 
+## IMPORTANT!
+## Please check the paths and files in the file "load_packages_and_functions.R" before running this!
+## All .R files must be in the same folder, specified below in 'lib_folder'
+lib_folder = "~/ad-omics/ricardo/MyRepo/structuralvariation/R_Library/"
+source(paste0(lib_folder,"load_packages_and_functions.R"))
+
+createDT <- function(DF, caption="", scrollY=500){
+  data <- DT::datatable(DF, caption=caption,
+    extensions = 'Buttons',
+    class = "display",
+    callback = JS("return table;"),
+    filter = c("none", "bottom", "top"), 
+    escape = TRUE,
+    style = "default", width = NULL, height = NULL, elementId = NULL,
+    fillContainer = getOption("DT.fillContainer", NULL),
+    autoHideNavigation = getOption("DT.autoHideNavigation", NULL),
+    selection = c("multiple", "single", "none"),
+    plugins = NULL, editable = FALSE,
+    options = list( dom = 'Bfrtip', 
+                    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'), 
+                    scrollY = scrollY, scrollX=T, scrollCollapse = T, paging = T,  
+                    columnDefs = list(list(className = 'dt-center', targets = "_all"))
+    )
+  ) 
+  return(data)
+}
+```
+
+# Selecting samples {.tabset .tabset-fade}
+
+Structural Variations (SVs) are increasingly recognized for their importance in genomics. Short-read sequencing is the most widely-used approach for genotyping large numbers of samples for SVs but suffers from relatively poor accuracy. SVCollector, is an open-source method that optimally selects samples to maximize variant discovery and validation using long read resequenc- ing or PCR-based validation. 
+
+SVCollector has two major ranking modes: topN, and greedy. For the topN mode, it picks samples with the largest number of SVs irrespective if the SVs are shared with other samples. For the greedy mode, it finds a set of samples that collectively contain the largest number of distinct variants. Solving this exactly is computationally intractable as it is a version of the well-known NP-hard set cover problem. Consequently, it uses a greedy approximation thatstarts with the sample with the largest number of variants, and then iteratively picks the sample containing the largest number variants not yet included in the set. It also has a random mode that mimics an arbitrary selection process, and is helpful for evaluating the diversity of the topN or greedy approaches. For each mode, SVCollector reports the rank, sample name, its unique contribution of SVs, the cumulative sum of SVs up to the chosen sample, and the cumulative percentage compared to the total number of SVs in the input VCF file.
+
+```{r warning=FALSE, message=FALSE, results='hide'}
+root_dir = "~/ad-omics/ricardo/"
+svcollector_path = paste0(root_dir,"MyApps/SVCollector/Debug/SVCollector")
+svcollector_script = paste0(root_dir,"MyApps/SVCollector/SVCollector.sh")
+
+work_dir = paste0(root_dir,"AMP_AD/LongReadsValidation.raw/")
+system(paste0("mkdir -p ", work_dir))
+
+ROSMAP_path = paste0(root_dir,"ROSMAP/")
+raw_merged_ROSMAP = paste0(ROSMAP_path,"03_MergedCalls/SURVIVOR/population/samples_merged_CNV.vcf")
+vcf_ROSMAP = paste0(work_dir,"ROSMAP.vcf")
+
+MSBB_path = paste0(root_dir,"MSinai/")
+raw_merged_MSBB = paste0(MSBB_path,"03_MergedCalls/SURVIVOR/population/samples_merged_CNV.vcf")
+vcf_MSBB = paste0(work_dir,"MSBB.vcf")
+```
+
+```{r warning=FALSE, message=FALSE, results='hide', eval=T}
+ROSMAP_samples = system(paste0("ml bcftools; bcftools query -l ", ROSMAP_path, "05_MergedSamples/fromSMOOVE/samples_merged_DEL.Final.vcf.gz"), intern = T)
+sysout = system(paste0("ml bcftools; bcftools view --force-samples -s ", paste0(ROSMAP_samples, collapse = ","), " ", raw_merged_ROSMAP, " | bcftools sort -o ", vcf_ROSMAP), intern = T)
+
+MSBB_samples = system(paste0("ml bcftools; bcftools query -l ", MSBB_path, "05_MergedSamples/fromSMOOVE/samples_merged_DEL.Final.vcf.gz"), intern = T)
+sysout = system(paste0("ml bcftools; bcftools view --force-samples -s ", paste0(MSBB_samples, collapse = ","), " ", raw_merged_MSBB, " | bcftools sort -o ", vcf_MSBB), intern = T)
+```
+
+## ROSMAP {.tabset .tabset-fade .tabset-pills}
+
+```{r warning=FALSE, message=FALSE, results='hide', eval=T}
+num_samples = 100
+cohort = "ROSMAP"
+sysout = system(paste("ml parallel;",svcollector_script, vcf_ROSMAP, num_samples, work_dir), intern = T)
+```
+
+```{r warning=FALSE, message=FALSE, results='hide', eval=F}
+num_samples = 100
+cohort = "ROSMAP"
+
+mode = "greedy"
+ROSMAP_output = paste0(work_dir, cohort, "_", mode ,"_rank.txt")
+sysout = system(paste0(svcollector_path, " ", mode ," ", # Greedy
+              vcf_ROSMAP, " ", # Input VCF file
+              " -1 ", # Min allele count (-1 to disable)
+              num_samples, # Number of samples to select
+              " 0 ", # Take AF into account (1) or not (0) per allele
+              ROSMAP_output # Output file
+              ), intern = T)
+ROSMAP_results_greedy = read.table(ROSMAP_output, sep="\t", header = T, check.names = F, comment.char = "")
+
+mode = "topN"
+ROSMAP_output = paste0(work_dir, cohort, "_", mode ,"_rank.txt")
+sysout = system(paste0(svcollector_path, " ", mode ," ", # topN
+              vcf_ROSMAP, " ", # Input VCF file
+              num_samples, " ", # Number of samples to select
+              ROSMAP_output # Output file
+              ), intern = T)
+ROSMAP_results_topN = read.table(ROSMAP_output, sep="\t", header = T, check.names = F, comment.char = "")
+
+mode = "random"
+ROSMAP_output = paste0(work_dir, cohort, "_", mode ,"_rank.txt")
+sysout = system(paste0(svcollector_path, " ", mode ," ", # random
+              vcf_ROSMAP, " ", # Input VCF file
+              num_samples, " ", # Number of samples to select
+              ROSMAP_output # Output file
+              ), intern = T)
+ROSMAP_results_random = read.table(ROSMAP_output, sep="\t", header = T, check.names = F, comment.char = "")
+```
+
+### Greedy
+
+```{r}
+cohort = "ROSMAP"
+mode = "greedy"
+SVCollector_output = paste0(work_dir, cohort, ".vcf.", mode)
+SVCollector_results_greedy = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV")) 
+createDT(SVCollector_results_greedy)
+```
+
+### TopN
+
+```{r}
+cohort = "ROSMAP"
+mode = "topN"
+SVCollector_output = paste0(work_dir, cohort, ".vcf.", mode)
+SVCollector_results_topN = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV"))
+createDT(SVCollector_results_topN)
+```
+
+### Random
+
+```{r}
+cohort = "ROSMAP"
+mode = "random.1"
+SVCollector_output = paste0(work_dir, cohort, ".vcf.", mode)
+SVCollector_results_random = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "",  col.names = c("Sample","numSV","cumsumSV","percSV"))
+createDT(SVCollector_results_random)
+```
+
+```{r}
+SVCollector_results_greedy$mode = "greedy"
+SVCollector_results_topN$mode = "topN"
+SVCollector_results_random$mode = "random"
+ROSMAP = rbind(SVCollector_results_greedy,
+             SVCollector_results_topN,
+             SVCollector_results_random)
+```
+
+## MSBB {.tabset .tabset-fade .tabset-pills}
+
+```{r warning=FALSE, message=FALSE, results='hide', eval=T}
+num_samples = 100
+cohort = "MSBB"
+sysout = system(paste("ml parallel;",svcollector_script, vcf_MSBB, num_samples, work_dir), intern = T)
+```
+
+```{r warning=FALSE, message=FALSE, results='hide', eval=F}
+num_samples = 100
+cohort = "MSBB"
+
+mode = "greedy"
+MSBB_output = paste0(work_dir, cohort, "_", mode ,"_rank.txt")
+sysout = system(paste0(svcollector_path, " ", mode ," ", # Greedy
+              vcf_MSBB, # Input VCF file
+              " -1 ", # Min allele count (-1 to disable)
+              num_samples, # Number of samples to select
+              " 0 ", # Take AF into account (1) or not (0) per allele
+              MSBB_output # Output file
+              ), intern = T)
+MSBB_results_greedy = read.table(MSBB_output, sep="\t", header = T, check.names = F, comment.char = "")
+
+mode = "topN"
+MSBB_output = paste0(work_dir, cohort, "_", mode ,"_rank.txt")
+sysout = system(paste0(svcollector_path, " ", mode ," ", # topN
+              vcf_MSBB, " ", # Input VCF file
+              num_samples, " ", # Number of samples to select
+              MSBB_output # Output file
+              ), intern = T)
+MSBB_results_topN = read.table(MSBB_output, sep="\t", header = T, check.names = F, comment.char = "")
+
+mode = "random"
+MSBB_output = paste0(work_dir, cohort, "_", mode ,"_rank.txt")
+sysout = system(paste0(svcollector_path, " ", mode ," ", # random
+              vcf_MSBB, " ", # Input VCF file
+              num_samples, " ", # Number of samples to select
+              MSBB_output # Output file
+              ), intern = T)
+MSBB_results_random = read.table(MSBB_output, sep="\t", header = T, check.names = F, comment.char = "")
+```
+
+### Greedy
+
+```{r}
+cohort = "MSBB"
+mode = "greedy"
+SVCollector_output = paste0(work_dir, cohort, ".vcf.", mode)
+SVCollector_results_greedy = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV")) 
+createDT(SVCollector_results_greedy)
+```
+
+### TopN
+
+```{r}
+cohort = "MSBB"
+mode = "topN"
+SVCollector_output = paste0(work_dir, cohort, ".vcf.", mode)
+SVCollector_results_topN = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "", col.names = c("Sample","numSV","cumsumSV","percSV"))
+createDT(SVCollector_results_topN)
+```
+
+### Random
+
+```{r}
+cohort = "MSBB"
+mode = "random.1"
+SVCollector_output = paste0(work_dir, cohort, ".vcf.", mode)
+SVCollector_results_random = read.table(SVCollector_output, sep="\t", header = T, check.names = F, comment.char = "",  col.names = c("Sample","numSV","cumsumSV","percSV"))
+createDT(SVCollector_results_random)
+```
+
+```{r}
+SVCollector_results_greedy$mode = "greedy"
+SVCollector_results_topN$mode = "topN"
+SVCollector_results_random$mode = "random"
+MSBB = rbind(SVCollector_results_greedy,
+             SVCollector_results_topN,
+             SVCollector_results_random)
+```
+
+# Selection evaluation
+
+```{r message=FALSE, warning=FALSE, dpi=600, fig.width=10, fig.height=5}
+par(mfrow=c(1,2))
+plot(x = 1:100, y=(1:100)/100, type="n", 
+     main="MSBB", bty="L", xlab="Samples", ylab="Cumulative Fraction of SVs",
+     xlim=c(0,101),ylim=c(0,1))
+grid()
+lines(x = 1:100, y=MSBB[MSBB$mode == "greedy","percSV"], type="l", lty = 1, lwd = 2, col = "#BB0021FF")
+lines(x = 1:100, y=MSBB[MSBB$mode == "topN","percSV"], type="l", lty = 1, lwd = 2, col = "#3B4992FF")
+lines(x = 1:100, y=MSBB[MSBB$mode == "random","percSV"], type="l", lty = 1, lwd = 2, col = "#808180FF")
+abline(v=c(10), col=c("gray20"), lty=c(2), lwd=c(1))
+minor.tick(nx=5, ny=2, tick.ratio=0.5)
+legend(70, 0.30, legend=c("Greedy", "TopN", "Random"),  col=c("#BB0021FF", "#3B4992FF", "#808180FF"), lty = 1:1, lwd = 2, cex=0.7)
+
+plot(x = 1:100, y=(1:100)/100, type="n", 
+     main="ROSMAP", bty="L", xlab="Samples", ylab="Cumulative Fraction of SVs",
+     xlim=c(0,101),ylim=c(0,1))
+grid()
+lines(x = 1:100, y=ROSMAP[ROSMAP$mode == "greedy","percSV"], type="l", lty = 1, lwd = 2, col = "#BB0021FF")
+lines(x = 1:100, y=ROSMAP[ROSMAP$mode == "topN","percSV"], type="l", lty = 1, lwd = 2, col = "#3B4992FF")
+lines(x = 1:100, y=ROSMAP[ROSMAP$mode == "random","percSV"], type="l", lty = 1, lwd = 2, col = "#808180FF")
+abline(v=c(10), col=c("gray20"), lty=c(2), lwd=c(1))
+minor.tick(nx=5, ny=2, tick.ratio=0.5)
+legend(70, 0.30, legend=c("Greedy", "TopN", "Random"),  col=c("#BB0021FF", "#3B4992FF", "#808180FF"), lty = 1:1, lwd = 2, cex=0.7)
+```
+
+# TOP 10
+
+Choosing TOP 10 samples from "greedy" mode for each cohort and adding other metadata information.
+
+## ROSMAP
+
+```{r message=FALSE, warning=FALSE}
+ROSMAP_metadata = read.table(paste0(ROSMAP_path,"Data/WGS_Metadata.txt"), header = T, stringsAsFactors = F, check.names = F)
+ROSMAP_Ancestry = read.csv(paste0(ROSMAP_path,"01_GeneticPC/pca.ancestry_prediction.csv"), header = T, stringsAsFactors = F, check.names = F, comment.char = "")
+
+top_ROSMAP = ROSMAP %>% filter(mode=="greedy") %>% top_n(10,-percSV)
+top_ROSMAP$greedy_rank = match(top_ROSMAP$Sample, ROSMAP[ROSMAP$mode=="greedy","Sample"])
+top_ROSMAP$topN_rank = match(top_ROSMAP$Sample, ROSMAP[ROSMAP$mode=="topN","Sample"])
+top_ROSMAP$random_rank = match(top_ROSMAP$Sample, ROSMAP[ROSMAP$mode=="random","Sample"])
+top_ROSMAP = inner_join(top_ROSMAP, ROSMAP_metadata, by=c("Sample" = "wgs_id"))
+top_ROSMAP2 = inner_join(top_ROSMAP, ROSMAP_Ancestry, by=c("Sample" = "#sample"))
+createDT(top_ROSMAP2)
+```
+
+## MSBB
+
+```{r message=FALSE, warning=FALSE}
+MSBB_metadata = read.table(paste0(MSBB_path,"Data/WGS_Metadata.txt"), header = T, stringsAsFactors = F, check.names = F)
+MSBB_Ancestry = read.csv(paste0(MSBB_path,"01_GeneticPC/pca.ancestry_prediction.csv"), header = T, stringsAsFactors = F, check.names = F, comment.char = "")
+
+top_MSBB = MSBB %>% filter(mode=="greedy") %>% top_n(10,-percSV)
+top_MSBB$greedy_rank = match(top_MSBB$Sample, MSBB[MSBB$mode=="greedy","Sample"])
+top_MSBB$topN_rank = match(top_MSBB$Sample, MSBB[MSBB$mode=="topN","Sample"])
+top_MSBB$random_rank = match(top_MSBB$Sample, MSBB[MSBB$mode=="random","Sample"])
+top_MSBB = inner_join(top_MSBB, MSBB_metadata, by=c("Sample" = "WGS"))
+top_MSBB2 = inner_join(top_MSBB, MSBB_Ancestry, by=c("Sample" = "#sample"))
+createDT(top_MSBB2)
+```
+
+# Session info
+
+```{r}
+sessionInfo()
+```
