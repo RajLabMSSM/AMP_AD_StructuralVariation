@@ -24,7 +24,7 @@ Complete LD tagging information between SVs and SNVs mapped in ROSMAP.
 
 | Column | Description |
 | :--- | :--- |
-| _sv_id_ |  Merged cohort SV ID |
+| _sv_id_ |  SV ID (ROSMAP) |
 | _sv_chr_ | Chromosome of the SV  |
 | _sv_pos_ | Most upstream genomic position within the chromosome of SV breakpoints |
 | _sv_len_ | SV length |
