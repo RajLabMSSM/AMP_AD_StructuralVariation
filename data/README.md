@@ -12,9 +12,28 @@ The structure of this directory is as follows:
 | :--- | :--- |
 | [`SV_calls/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/SV_calls/) | SV site-frequency data from each study cohort |
 | [`SV_xQTL/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/SV_xQTL/) | Full nominal and permuted SV-xQTL summary statistics |
+| [`meta_analysis/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/meta_analysis/) | Full mashR summary statistics for SV-eQTLs across brain regions |
 | [`disease_associations/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/disease_associations/) | Full case-control SV associations summary statistics |
 
 ## File description
+
+### meta_analysis
+
+Summary statistics from [mashR](https://doi.org/10.1038/s41588-018-0268-8). Meta-analysis was performed across all AMP-AD cohorts and brain regions. Only the best variant per gene is reported. 
+
+| Column | Description |
+| :--- | :--- |
+| _cohort_region_ |  Cohort and brain region |
+| _sv_ |  Merged cohort SV ID |
+| _sv_chr_ | Chromosome of the SV  |
+| _sv_start_ | Most upstream genomic position within the chromosome of SV breakpoints |
+| _sv_end_ | Most downstream genomic position within the chromosome of SV breakpoints |
+| _ensembl_ | ENSEMBL_ID of the tested phenotype (gencode v24) |
+| _gene_name_ | Gene name |
+| _lfsr_ |  Mash local false sign rates |
+| _posterior_mean_ |  Mash posterior means  |
+| _standard_error_ |  Standard error |
+| _mash_beta_ |  Mash slope (posterior mean * standard error)  |
 
 ### disease_associations
 
