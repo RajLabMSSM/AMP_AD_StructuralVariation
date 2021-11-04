@@ -11,11 +11,27 @@ The structure of this directory is as follows:
 | Subdirectory | Description |
 | :--- | :--- |
 | [`SV_calls/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/SV_calls/) | SV site-frequency data from each study cohort |
+| [`LD_tagging/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/LD_tagging/) | LD between SVs and SNVs |
 | [`SV_xQTL/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/SV_xQTL/) | Full nominal and permuted SV-xQTL summary statistics |
 | [`meta_analysis/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/meta_analysis/) | Full mashR summary statistics for SV-eQTLs across brain regions |
 | [`disease_associations/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/disease_associations/) | Full case-control SV associations summary statistics |
 
 ## File description
+
+### LD_tagging
+
+Complete LD tagging information between SVs and SNVs mapped in ROSMAP.
+
+| Column | Description |
+| :--- | :--- |
+| _sv_id_ |  Merged cohort SV ID |
+| _sv_chr_ | Chromosome of the SV  |
+| _sv_pos_ | Most upstream genomic position within the chromosome of SV breakpoints |
+| _sv_len_ | SV length |
+| _snv_id_ | rsID |
+| _snv_chr_ | SNV chromosome |
+| _snv_pos_ |  SNV position in the chromosome |
+| _r2_ |  LD R2  |
 
 ### meta_analysis
 
