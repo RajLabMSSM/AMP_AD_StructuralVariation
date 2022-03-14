@@ -16,6 +16,8 @@ The structure of this directory is as follows:
 | [`meta_analysis/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/meta_analysis/) | Full mashR summary statistics for SV-eQTLs across brain regions |
 | [`disease_associations/`](https://github.com/RajLabMSSM/AMP_AD_StructuralVariation/tree/main/data/disease_associations/) | Full case-control SV associations summary statistics |
 
+*Individual-level calls and PacBio long-read data can accessed at [Synapse:syn26952206](https://www.synapse.org/#!Synapse:syn26952206)*
+
 ## File description
 
 ### LD_tagging
