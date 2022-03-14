@@ -2,9 +2,9 @@
 
 ------
 
-**"The impact of genomic structural variation on the transcriptome, chromatin, and proteome in the human brain"**
+**"Integrating whole-genome sequencing with multi-omic data reveals the impact of structural variants on gene regulation in the human brain"**
 
-Ricardo A. Vialle, Katia de Paiva Lopes, David A. Bennett, John F. Crary, Towfique Raj (2021) [*medRxiv preprint*](https://doi.org/10.1101/2021.02.25.21252245)
+Ricardo A. Vialle, Katia de Paiva Lopes, David A. Bennett, John F. Crary, Towfique Raj (2022) [*Nature Neuroscience*](https://www.nature.com/articles/s41593-022-01031-7)
 
 ------
 
